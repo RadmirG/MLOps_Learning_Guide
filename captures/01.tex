@@ -1,0 +1,74 @@
+\chapter{Hardware, which has been used}
+
+Just to get some information about installed hardware on the current machine, the bash script given in the Listing 1.1 delivers such a value. 
+
+\begin{lstlisting}[style=BashStyle, caption=Bash script for extracting hardware information on a Linux machine]
+    #!/bin/bash
+    echo "===== CPU ====="
+    lscpu | grep -E "Model name|Socket|Thread|CPU\\(s\\)|NUMA|MHz"
+    
+    echo -e "\n===== MEMORY ====="
+    free -h
+    
+    echo -e "\n===== DISKS ====="
+    lsblk -o NAME,SIZE,TYPE,MOUNTPOINT
+    
+    echo -e "\n===== GPU ====="
+    if command -v nvidia-smi &> /dev/null
+    then
+        nvidia-smi
+    else
+        lspci | grep VGA
+    fi
+    
+    echo -e "\n===== PCI DEVICES ====="
+    lspci -nn | grep -E "VGA|3D|Ethernet"
+    
+    echo -e "\n===== TEMPERATURE SENSORS ====="
+    sensors    
+\end{lstlisting}
+
+In my case it gives me:
+
+\begin{lstlisting}[style=BashStyle]
+	===== CPU =====
+	CPU(s):                               36
+	On-line CPU(s) list:                  0-35
+	Model name:                           Intel(R) Xeon(R) W-2295 CPU @ 3.00GHz
+	Thread(s) per core:                   2
+	Socket(s):                            1
+	CPU max MHz:                          4800,0000
+	CPU min MHz:                          1200,0000
+	NUMA node(s):                         1
+	NUMA node0 CPU(s):                    0-35
+	
+	===== MEMORY =====
+	total        used        free      shared  buff/cache   available
+	Mem:           251Gi       4,1Gi       172Gi        19Mi        74Gi       245Gi
+	Swap:          2,0Gi          0B       2,0Gi
+	
+	===== DISKS =====
+	NAME          SIZE TYPE MOUNTPOINT
+	sda           9,1T disk /data
+	nvme0n1     953,9G disk
+	|--nvme0n1p1   512M part /boot/efi
+	|--nvme0n1p2 953,4G part /
+	
+	===== GPU =====
+	Wed Oct 15 15:45:53 2025
+	+----------------------------------------------------------------------+
+	| NVIDIA-SMI 580.65.06  Driver V.: 580.65.06      CUDA Version: 13.0   |
+	+----------------------+------------------------+----------------------+
+	| GPU  Name            | Bus-Id          Disp.A |               Memory |
+	|======================+========================+======================+
+	|   0  Quadro RTX 8000 |   00000000:65:00.0 Off |             49152MiB |
+	+----------------------+------------------------+----------------------+
+	|   1  Quadro RTX 8000 |   00000000:B6:00.0 Off |             49152MiB |
+	+----------------------+------------------------+----------------------+	
+	
+	===== PCI DEVICES =====
+	01:00.0 Ethernet [0200]: Intel I210 Gigabit Network Connection [8086:1533] (rev 03)
+	02:00.0 Ethernet [0200]: Intel I210 Gigabit Network Connection [8086:1533] (rev 03)
+	65:00.0 VGA [0300]: NVIDIA TU102GL [Quadro RTX 6000/8000] [10de:1e30] (rev a1)
+	b6:00.0 VGA [0300]: NVIDIA TU102GL [Quadro RTX 6000/8000] [10de:1e30] (rev a1)
+\end{lstlisting}

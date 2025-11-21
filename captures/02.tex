@@ -1,0 +1,109 @@
+\chapter{What is MLOps?}
+
+The goal of this summary is to understand the motivation behind \textbf{MLOps (Machine Learning Operations)}, its emergence as a discipline, and how it extends the principles of classical 
+\href{https://en.wikipedia.org/wiki/DevOps}{DevOps} to the field of Machine Learning.  
+We will distinguish between the research-oriented workflow typical for data scientists and the engineering-oriented workflow required to deploy and maintain machine learning systems at scale. \\
+
+MLOps aims to close the gap between experimental model development and robust, automated, and maintainable production environments. It provides the methodological and technological foundation for \textit{reproducible, automated, and continuously improved} ML systems.
+
+%------------------------------------------------
+\section*{Motivation}
+In traditional ML practice, models are trained and evaluated manually, often in Jupyter notebooks, on local data subsets. This works well for research and prototyping but fails when moving toward production due to:
+\begin{itemize}
+	\item Lack of reproducibility (no fixed data versions, ad-hoc code changes).
+	\item Manual retraining and deployment steps.
+	\item Missing automation, monitoring, and feedback loops.
+	\item Divergence between training and production environments.
+\end{itemize}
+
+MLOps introduces structure and automation similar to software engineering. It formalizes how models are trained, validated, deployed, monitored, and retrained, thus ensuring both scientific rigor and operational reliability.
+
+%------------------------------------------------
+\section*{Core Concepts}
+
+\subsection*{ML Research vs. ML Engineering}
+\begin{itemize}
+	\item \textbf{ML Research:} Focuses on designing algorithms, optimizing architectures, and proving performance improvements on benchmark datasets. The emphasis is on exploration, hypothesis testing, and innovation.
+	\item \textbf{ML Engineering:} Concerned with building reliable, scalable, and maintainable ML systems. The emphasis is on reproducibility, continuous integration, monitoring, and lifecycle management.
+\end{itemize}
+
+While ML research is often experimental, ML engineering requires controlled processes and automation — comparable to the relationship between theoretical science and industrial engineering.
+
+%------------------------------------------------
+\subsection*{Why Models in Jupyter Notebooks Are Not Production-Ready}
+Jupyter notebooks are excellent for interactive exploration but have inherent limitations:
+\begin{itemize}
+	\item They lack version control for data and parameters.
+	\item Execution order is not guaranteed, leading to hidden state issues.
+	\item Manual execution cannot scale or be monitored.
+	\item Integration with CI/CD, monitoring, and production APIs is minimal.
+\end{itemize}
+A notebook is a sandbox; production requires \textit{pipelines}, \textit{versioned artifacts}, and \textit{infrastructure integration}.
+
+%------------------------------------------------
+\subsection*{The MLOps Pyramid}
+
+The conceptual structure of MLOps can be represented as a pyramid of five interdependent layers:
+
+\begin{enumerate}
+	\item \textbf{Data Layer:} Reliable data ingestion, validation, and versioning. Tools such as DVC, LakeFS, or Delta Lake ensure reproducibility of datasets.
+	\item \textbf{Model Layer:} Training, tracking, and storing models in registries (e.g., MLflow, ModelDB). This layer provides reproducible artifacts.
+	\item \textbf{CI/CD Layer:} Continuous Integration and Continuous Deployment pipelines (e.g., GitLab CI, Jenkins, ArgoCD) automate testing and release cycles.
+	\item \textbf{Monitoring Layer:} Continuous observation of models in production (Prometheus, Grafana, Evidently AI). Detects performance degradation and drift.
+	\item \textbf{Governance Layer:} Enforces compliance, audit trails, explainability, and ethical considerations for model usage.
+\end{enumerate}
+
+Each layer builds upon the previous one, forming a hierarchy of reproducibility and automation — from raw data to responsible deployment.
+
+%------------------------------------------------
+\subsection*{Key Principles of MLOps}
+MLOps is driven by several foundational principles:
+
+\subsection*{Reproducibility.}
+Every experiment, dataset, model, and environment must be uniquely identifiable and reproducible at any time. This ensures scientific integrity and traceability.
+
+\subsection*{Automation (Pipelines).}
+Training, validation, and deployment steps should be automated via pipelines (Airflow, Kubeflow, Tekton). Manual intervention is minimized.
+
+\subsection*{Version Control.}
+Not only source code, but also data, model parameters, and configurations must be versioned. Git is extended by tools like DVC and MLflow registries.
+
+\subsection*{Continuous Training (CT).}
+Analogous to Continuous Integration in software, models are retrained continuously as new data becomes available, keeping them current with evolving environments.
+
+\subsection*{Model Drift and Retraining.}
+Deployed models degrade as data distributions shift (``drift''). MLOps integrates drift detection, monitoring, and automated retraining workflows.
+
+%------------------------------------------------
+\section*{Example: Scientific Machine Learning (PINNs)}
+
+To illustrate, consider the inverse heat conduction problem:
+\[
+\partial_t u - \nabla \cdot (a(x,y)\nabla u) = f(x,y,t),
+\]
+where the goal is to infer the spatially varying diffusivity \(a(x,y)\) and possibly the source term \(f(x,y,t)\) from observed temperature data \(u(x,y,t)\).
+
+\subsubsection*{Without MLOps}
+\begin{itemize}
+	\item Data preprocessing, network training, and validation occur manually in notebooks.
+	\item Each retraining (e.g., when new measurements arrive) requires manual repetition.
+	\item No model versioning or metadata tracking — results are difficult to reproduce.
+\end{itemize}
+
+\subsubsection*{With MLOps}
+\begin{itemize}
+	\item \textbf{Data Ingestion:} Experimental measurements are automatically collected and versioned (e.g., via DVC).
+	\item \textbf{Training Pipeline:} Airflow triggers a PyTorch/DeepXDE training job on GPUs, logging all metrics to MLflow.
+	\item \textbf{Model Registry:} The trained PINN is stored with version and metadata.
+	\item \textbf{Deployment:} The model is deployed as an API service (e.g., KServe or FastAPI) for simulation queries.
+	\item \textbf{Monitoring:} Drift detectors compare new observations with model predictions.
+	\item \textbf{Retraining:} A CI/CD trigger starts retraining when deviation exceeds a threshold.
+\end{itemize}
+
+This workflow transforms a research prototype into a maintainable scientific software system — reproducible, observable, and scalable.
+
+%------------------------------------------------
+\section*{Summary}
+MLOps bridges the gap between experimental research and production-grade ML systems.  
+It introduces a rigorous lifecycle of versioned data, tracked experiments, automated pipelines, monitored deployments, and governed operation.  
+In scientific contexts such as physics-informed modeling, this paradigm is crucial for ensuring both scientific validity and operational robustness.

@@ -1,0 +1,426 @@
+\chapter{Core MLOps Architecture}
+
+The objective of this module is to understand how the core components of an MLOps ecosystem fit together, and how containerization, orchestration, and automation form the foundation of scalable, reproducible machine learning systems.  
+We will explore the relationship between \textbf{Docker}, \textbf{Kubernetes}, and \textbf{OpenShift} as infrastructural layers, and how these integrate with higher-level ML services such as \textbf{Airflow}, \textbf{MLflow}, and \textbf{Kubeflow}.
+
+%------------------------------------------------
+\section*{Stack Overview}
+At the heart of modern MLOps lies the idea of \textbf{infrastructure abstraction}: machine learning workloads are encapsulated inside containers and orchestrated across clusters in a reproducible and portable manner.  
+A typical stack can be described as follows:
+\begin{itemize}[leftmargin=1.5cm]
+	\item \textbf{Docker + Kubernetes} provide environment isolation, scalability, and infrastructure abstraction.
+	\item \textbf{Airflow}, \textbf{Kubeflow}, and \textbf{MLflow} integrate to deliver automation, tracking, and governance.
+	\item \textbf{Declarative Pipelines} (YAML/JSON, Argo, Tekton) define reproducible workflows as code.
+	\item \textbf{GitOps} principles ensure versioned, auditable, and automatically deployed infrastructure.
+\end{itemize}
+
+These layers work together to move from experimentation to production while maintaining scientific rigor, operational stability, and continuous improvement.
+
+%------------------------------------------------
+\section*{From Containers to Clusters: Docker, Kubernetes, and OpenShift}
+
+\subsection*{Docker: The Fundamental Building Block}
+\textbf{Docker} provides a lightweight mechanism to package applications, dependencies, and environments into isolated \textit{containers}.  
+A Docker container behaves like a minimal operating system containing exactly what the program needs to run, ensuring consistent behavior across development, testing, and production.
+
+\subsection*{Conceptual analogy:}
+Each container is like a \textit{single laboratory box}—self-contained, portable, and isolated.  
+It has:
+\begin{itemize}
+	\item Its own filesystem (based on the Docker image).
+	\item Its own process space and networking.
+	\item Shared access to the host’s Linux kernel.
+\end{itemize}
+
+\subsection*{Why this matters for MLOps:}
+Reproducibility is central to scientific ML.  
+A Docker container guarantees that a trained model behaves identically whether it runs on a local workstation, a GPU server, or a cloud node.
+
+\subsection*{Example:}
+\begin{verbatim}
+docker build -t pinn-trainer .
+docker run --gpus all -v ./data:/data pinn-trainer
+\end{verbatim}
+This command builds and launches a reproducible environment to train a Physics-Informed Neural Network (PINN) on GPU hardware.
+
+\subsection*{Docker Compose: Managing Multiple Containers}
+As soon as an ML workflow involves multiple services—such as a training script, a database, and a monitoring dashboard—\textbf{Docker Compose} provides a unified configuration layer.
+
+\subsection*{Example:}
+\begin{verbatim}
+services:
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.16.0
+    ports: ["5000:5000"]
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: example
+\end{verbatim}
+
+Compose simplifies orchestration on a single machine, but it remains limited to one host.
+
+\subsection*{Kubernetes: Orchestrating Containers Across Clusters}
+When workloads must scale across multiple machines, \textbf{Kubernetes (K8s)} acts as an \textit{orchestrator}.  
+It automatically deploys, scales, and monitors containers across a distributed cluster of nodes.
+
+\subsection*{Key Kubernetes concepts:}
+\begin{itemize}
+	\item \textbf{Pod:} Smallest deployable unit (one or more containers).
+	\item \textbf{Node:} A physical or virtual machine where Pods run.
+	\item \textbf{Deployment:} Blueprint for desired number of replicas and version management.
+	\item \textbf{Service:} Provides a stable network endpoint for distributed Pods.
+	\item \textbf{Ingress:} Manages external access (HTTP/HTTPS routing).
+\end{itemize}
+
+Kubernetes ensures high availability, self-healing, and dynamic scaling, forming the operational core of most MLOps infrastructures.
+
+\subsection*{Analogy:}
+If each Docker container is a \textit{laboratory box}, Kubernetes is the \textit{facility manager}—it allocates space, restarts failed experiments, and keeps the environment balanced.
+
+\subsection*{OpenShift: The Enterprise Platform Layer}
+\textbf{OpenShift} is Red Hat’s enterprise-grade platform built on top of Kubernetes.  
+It provides a more opinionated, secure, and user-friendly ecosystem by integrating:
+\begin{itemize}
+	\item Developer tooling (builds, web console, source-to-image).
+	\item CI/CD (Tekton pipelines, ArgoCD).
+	\item Security and governance (OAuth, RBAC, quotas).
+	\item Monitoring and logging (Prometheus, Grafana, EFK).
+\end{itemize}
+
+\subsection*{Analogy:}
+Kubernetes is the engine; OpenShift is the fully assembled car with integrated dashboards, autopilot, and safety systems.
+
+\subsection*{Architectural Layering:}
+\begin{center}
+     \begin{verbatim}
+                    |-------------------------------|
+                    | OpenShift (Platform Layer)    |
+                    |  |-- Developer Tools, CI/CD   |
+                    |  |-- Security, Monitoring     |
+                    |--------------|----------------|
+                                   |
+                    |--------------|----------------|
+                    | Kubernetes (Orchestration)    |
+                    |  |-- Pods, Deployments, Nodes |
+                    |  |-- Services, Ingress        |
+                    |--------------|----------------|
+                                   |
+                    |--------------|----------------|
+                    | Docker / CRI-O (Runtime)      |
+                    |  |-- Images, Containers       |
+                    |--------------|----------------|
+                                   |
+                    |--------------|----------------|
+                    | Host OS (e.g., Ubuntu)        |
+                    |-------------------------------|
+    \end{verbatim}
+\end{center}
+
+This stack provides a full abstraction from hardware to application-level MLOps orchestration.
+
+%------------------------------------------------
+\section*{Architecture Layout}
+
+An MLOps system can be conceptualized as multiple layers, from infrastructure to model governance:
+
+\begin{verbatim}
++-----------------------------------------------------------+
+|               Model Governance & Monitoring               |
+|      (Evidently, Prometheus, Grafana, WhyLabs, etc.)      |
++-----------------------------------------------------------+
+|                   Continuous Deployment                   |
+|    (ArgoCD, Jenkins, GitLab CI/CD, Tekton Pipelines)      |
++-----------------------------------------------------------+
+|             ML Workflow Orchestration Layer               |
+| (Airflow, Kubeflow Pipelines, Prefect, Dagster, etc.)     |
++-----------------------------------------------------------+
+|            Experiment Tracking & Model Registry           |
+|                   (MLflow, ModelDB)                       |
++-----------------------------------------------------------+
+|                 Containerized Training                    |
+|            (Docker, Kubernetes, OpenShift)                |
++-----------------------------------------------------------+
+|              Data Versioning and Ingestion                |
+|           (DVC, LakeFS, Delta Lake, Feast)                |
++-----------------------------------------------------------+
+|                     Hardware Layer                        |
+|              (CPU, GPU, TPU clusters, Cloud)              |
++-----------------------------------------------------------+
+\end{verbatim}
+
+Each layer can evolve independently but interacts via versioned interfaces and declarative specifications.
+
+%------------------------------------------------
+\section*{Discussion}
+
+\subsection*{Why Kubernetes/OpenShift Forms the Backbone.}
+Kubernetes abstracts away infrastructure complexity. It treats compute nodes as a uniform resource pool, automatically managing container scheduling, scaling, and failover.  
+OpenShift extends this with enterprise features—security, governance, multi-tenancy—making it suitable for research labs, production environments, and hybrid cloud deployments.
+
+\subsection*{Containerization as a Reproducibility Mechanism.}
+Every experiment or training run can be encapsulated into a container image, ensuring identical results across hardware or environments.  
+This property is critical in scientific ML, where reproducibility is as important as accuracy.
+
+\subsection*{CI/CD and Infrastructure-as-Code Integration.}
+MLOps inherits from DevOps the principles of automation and version control:
+\begin{itemize}
+	\item \textbf{CI (Continuous Integration)} ensures that code changes are tested and validated automatically.
+	\item \textbf{CD (Continuous Deployment)} enables fast, safe delivery of new models and services.
+	\item \textbf{Infrastructure as Code (IaC)} expresses the entire system (nodes, pods, services, pipelines) as declarative YAML or JSON—enabling complete environment recreation.
+\end{itemize}
+
+Together, these mechanisms make ML systems scalable, observable, and maintainable—transforming one-time experiments into continuously evolving, production-grade scientific platforms.
+
+
+%------------------------------------------------
+\section{Airflow, Kubeflow, and MLflow: Integration Patterns}
+
+\subsection*{Roles and Interfaces}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Airflow} orchestrates the \emph{end-to-end workflow}: data ingestion, validation, triggering training, post-processing, and deployment gates. It is task-centric and environment-agnostic.
+  \item \textbf{Kubeflow (Pipelines + Katib + KServe)} executes \emph{ML-specific jobs} on Kubernetes/OpenShift: GPU training, hyperparameter tuning, and model serving with autoscaling.
+  \item \textbf{MLflow} provides \emph{experiment tracking} and a \emph{model registry}: parameters, metrics, artifacts, and model versions for governance and rollbacks.
+\end{itemize}
+
+\subsection{Data Flow.} Airflow triggers a Kubeflow Pipeline (KFP) step that runs the GPU training container for the PINN. That step logs parameters/metrics/artifacts to MLflow. After evaluation, Airflow promotes the best run into the MLflow Model Registry and triggers a KServe deployment from the registered artifact.
+
+%------------------------------------------------
+\subsection*{End-to-end PINN Example (Research $\rightarrow$ Production)}
+Suppose we have:
+\begin{itemize}
+  \item \texttt{pinn\_model.py} defining \(u_\theta(x,y,t)\), PDE residuals, and loss terms.
+  \item \texttt{train.py} training the PINN on GPUs and logging to MLflow.
+  \item \texttt{serve.py} (optional) packing a prediction endpoint for offline serving.
+\end{itemize}
+
+\subsection*{Airflow DAG (high-level).}
+\begin{verbatim}
+@dag(schedule_interval="@daily", catchup=False)
+def inverse_heat_mlops():
+    prepare_data()     # ETL, validation, dataset versioning
+    run_kfp_training() # trigger Kubeflow Pipeline job on GPU
+    evaluate_runs()    # pick best MLflow run by metric (e.g., PDE residual)
+    register_model()   # promote to MLflow Model Registry (stage="Staging")
+    deploy_kserve()    # rolling deploy via KServe from the Registry artifact
+\end{verbatim}
+
+\subsection*{Kubeflow Pipeline step (pseudo-spec).}
+\begin{verbatim}
+component:
+  name: Train PINN
+  inputs: [dataset_uri, mlflow_uri, epochs, lr, a_reg, f_reg]
+  container:
+    image: registry/app/pinn-trainer:latest
+    command:
+      - python
+      - /app/train.py
+      - --data={{inputs.dataset_uri}}
+      - --epochs={{inputs.epochs}}
+      - --lr={{inputs.lr}}
+      - --mlflow={{inputs.mlflow_uri}}
+      - --a-reg={{inputs.a_reg}}
+      - --f-reg={{inputs.f_reg}}
+    resources:
+      limits: {nvidia.com/gpu: "1"}
+\end{verbatim}
+
+\subsection*{MLflow logging within \texttt{train.py} (excerpt).}
+\begin{verbatim}
+import mlflow, mlflow.pytorch as mpt
+mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI"))
+mlflow.set_experiment("inverse-heat-pinn")
+
+with mlflow.start_run(run_name="pinn-gpu"):
+    mlflow.log_param("epochs", epochs)
+    mlflow.log_param("lr", lr)
+    mlflow.log_param("a_reg", a_reg)
+    mlflow.log_param("f_reg", f_reg)
+    # ... training loop; log losses and PDE residuals
+    mlflow.log_metric("train_residual", residual_value, step=epoch)
+    # save model + artifacts (e.g., plots, checkpoints)
+    mpt.log_model(model, artifact_path="model")
+\end{verbatim}
+
+\subsection*{Promotion \& deployment gate.} After training completes, a gate task in Airflow queries MLflow for the best run (e.g., minimal PDE residual or validation error). If thresholds are met, Airflow:
+\begin{enumerate}
+  \item Promotes the run in the MLflow \emph{Model Registry} (e.g., from ``None'' to ``Staging'' or ``Production'').
+  \item Triggers a \emph{KServe} deployment pulling the artifact from the Registry storage (PVC/S3).
+\end{enumerate}
+
+%------------------------------------------------
+\section*{Declarative Pipelines (YAML/JSON, Argo, Tekton)}
+MLOps pipelines should be \emph{infrastructure-as-code}. Declarative specs ensure repeatability, reviews, and auditability.
+
+\subsection*{Examples}
+\subsection*{Argo Workflow snippet (conceptual).}
+\begin{verbatim}
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { name: inverse-heat-pinn }
+spec:
+  entrypoint: main
+  templates:
+  - name: main
+    steps:
+    - - name: etl
+        template: etl
+      - name: train
+        template: train
+      - name: evaluate
+        template: evaluate
+      - name: deploy
+        template: deploy
+  - name: train
+    container:
+      image: registry/app/pinn-trainer:latest
+      command: ["python","/app/train.py","--mlflow=http://mlflow:5000"]
+\end{verbatim}
+
+\subsection*{Tekton Pipeline snippet (OpenShift Pipelines).}
+\begin{verbatim}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata: { name: pinn-train-deploy }
+spec:
+  tasks:
+  - name: train
+    taskRef: { name: python-task }
+    params:
+    - name: image
+      value: registry/app/pinn-trainer:latest
+    - name: args
+      value:
+      - python
+      - /app/train.py
+      - --mlflow=$(params.mlflow_uri)
+  - name: deploy
+    runAfter: ["train"]
+    taskRef: { name: kserve-deploy-task }
+\end{verbatim}
+
+By storing these YAML specs in Git, we enable reviews, rollbacks, and reproducible automation across environments.
+
+%------------------------------------------------
+\section*{GitOps Principles}
+\textbf{GitOps} manages both \emph{applications} and \emph{infrastructure} through Git as the single source of truth. A controller (e.g., Argo CD) reconciles the live cluster state to match the Git state.
+
+\subsection*{Core Practices}
+\begin{itemize}[leftmargin=1.5cm]
+  \item Store Kubernetes/OpenShift manifests (Deployments, Services, Ingress/Routes, KServe, Tekton) in Git.
+  \item Use branches/tags for \emph{environments} (e.g., \texttt{dev}, \texttt{staging}, \texttt{prod}).
+  \item Rely on \emph{pull requests} for all changes (audit trail, review).
+  \item Argo CD continuously compares live cluster state with Git and applies drifts back to the desired config.
+\end{itemize}
+
+\subsection*{Benefit for PINNs.}
+Changes in PDE loss weights, architecture, or serving resources (e.g., GPUs, memory) are versioned and reviewed. Rollbacks are trivial, and experiments map cleanly to infrastructure changes.
+
+%------------------------------------------------
+\section*{How OpenShift Integrates with Airflow, Kubeflow, and MLflow}
+
+\subsection*{OpenShift as the Enterprise Kubernetes Layer}
+OpenShift provides:
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Security \& Auth}: OAuth, RBAC, SCCs (Security Context Constraints).
+  \item \textbf{Builds \& CI/CD}: OpenShift Pipelines (Tekton), OpenShift GitOps (Argo CD).
+  \item \textbf{Registry \& Routes}: Integrated image registry and HTTP(S) routing via Routes.
+  \item \textbf{Monitoring}: Prometheus/Grafana baked in; EFK for logs.
+\end{itemize}
+
+\subsection*{Running Airflow on OpenShift}
+\begin{itemize}[leftmargin=1.5cm]
+  \item Package Airflow components as Deployments (webserver, scheduler, workers) with a \texttt{ClusterIP} Service and an OpenShift \texttt{Route}.
+  \item Workers can request GPUs (\texttt{nvidia.com/gpu}) if PINN training is executed inside Airflow tasks.
+  \item Airflow tasks trigger Kubeflow Pipelines via KFP SDK or Argo/Tekton via API.
+\end{itemize}
+
+\subsection*{Airflow Deployment (conceptual).}
+\begin{verbatim}
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: airflow-worker }
+spec:
+  template:
+    spec:
+      containers:
+      - name: worker
+        image: registry/airflow:2.10
+        resources:
+          limits: { nvidia.com/gpu: "1" }
+\end{verbatim}
+
+\subsection*{Kubeflow / KServe on OpenShift}
+\begin{itemize}[leftmargin=1.5cm]
+  \item Use \textbf{KServe} to serve models from MLflow artifacts (PVC, S3, or object storage).
+  \item Auto-scaling via Knative; traffic management via OpenShift Routes/Ingress.
+\end{itemize}
+
+\subsection*{KServe \texttt{InferenceService} for PINN (conceptual).}
+\begin{verbatim}
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata: { name: pinn-predictor }
+spec:
+  predictor:
+    pytorch:
+      storageUri: s3://mlflow-artifacts/inverse-heat-pinn/Production
+      resources:
+        limits: { nvidia.com/gpu: "1", cpu: "2", memory: "8Gi" }
+\end{verbatim}
+
+\subsection*{MLflow on OpenShift}
+\begin{itemize}[leftmargin=1.5cm]
+  \item Run MLflow as a Deployment with a PersistentVolumeClaim for \texttt{backend-store} (e.g., SQLite/PostgreSQL) and \texttt{artifact-store} (PVC/S3).
+  \item Expose MLflow UI via an OpenShift \texttt{Route}.
+\end{itemize}
+
+\subsection*{MLflow Deployment (conceptual).}
+\begin{verbatim}
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: mlflow }
+spec:
+  template:
+    spec:
+      containers:
+      - name: mlflow
+        image: ghcr.io/mlflow/mlflow:v2.16.0
+        args: ["mlflow","server","--host","0.0.0.0","--port","5000",
+               "--backend-store-uri","postgresql://.../mlflow",
+               "--default-artifact-root","s3://mlflow-artifacts/"]
+\end{verbatim}
+
+\subsection*{Putting It Together on OpenShift (GitOps)}
+\begin{enumerate}
+  \item \textbf{Git Repos}:
+    \begin{itemize}
+      \item \textit{App repo}: PINN code (\texttt{pinn\_model.py}, \texttt{train.py}, Dockerfile).
+      \item \textit{Ops repo}: OpenShift/K8s manifests (Airflow, MLflow, KServe, Tekton Pipelines).
+    \end{itemize}
+  \item \textbf{Build \& Push}: OpenShift BuildConfigs or external CI build/push images to the internal registry.
+  \item \textbf{Deploy via Argo CD}: Sync manifests in \textit{ops repo} to cluster namespaces (\texttt{dev} $\rightarrow$ \texttt{staging} $\rightarrow$ \texttt{prod}).
+  \item \textbf{Run Pipeline}: Tekton or Argo executes the declarative pipeline (ETL $\rightarrow$ Train $\rightarrow$ Evaluate $\rightarrow$ Deploy).
+  \item \textbf{Observe}: Prometheus/Grafana dashboards + MLflow metrics; alert on drift (Evidently) and trigger retraining.
+\end{enumerate}
+
+%------------------------------------------------
+\section*{Operational Notes for the PINN Use Case}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Data versioning}: store measurement batches (HDF5/Parquet) with DVC/LakeFS; pass concrete dataset URIs into KFP runs.
+  \item \textbf{Resource profiles}: declare GPU requests/limits per training task to ensure fair scheduling on shared clusters.
+  \item \textbf{Artifacts}: save training curves, PDE residual maps, and mesh plots as MLflow artifacts to audit physical validity.
+  \item \textbf{Promotion policy}: require thresholds on PDE residuals and boundary-condition violations before model promotion.
+  \item \textbf{Rollback}: Argo CD and MLflow Registry both provide quick rollback to known-good model and manifests.
+\end{itemize}
+
+%------------------------------------------------
+\section*{Summary (Integration at a Glance)}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Airflow} = orchestration of the end-to-end job graph (triggers KFP/Tekton).
+  \item \textbf{Kubeflow} = GPU training, tuning (\emph{Katib}), and \emph{KServe} for serving.
+  \item \textbf{MLflow} = experiment tracking + registry for PINN model governance.
+  \item \textbf{Declarative Pipelines} = Argo/Tekton YAML encode the workflow as code.
+  \item \textbf{GitOps} = Argo CD keeps the cluster aligned with Git manifests.
+  \item \textbf{OpenShift} = enterprise Kubernetes with security, routes, registry, pipelines, and GitOps—hosting all components consistently.
+\end{itemize}

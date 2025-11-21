@@ -1,0 +1,182 @@
+\chapter{Data and Experiment Management}
+
+\section*{Goal}
+The goal of this module is to design a reproducible strategy for handling data, experiments, and models throughout the machine learning lifecycle.  
+In scientific ML, this step ensures that datasets, scripts, and results can be precisely reproduced, verified, and compared across iterations.  
+Reproducibility is not only an engineering necessity but also a scientific requirement.
+
+%------------------------------------------------
+\section*{Conceptual Overview}
+Every experiment can be expressed as a tuple:
+\[
+E = (\mathcal{D}, \mathcal{M}, \Theta, \mathcal{R}),
+\]
+where
+\begin{itemize}
+	\item \(\mathcal{D}\) — dataset or measurement configuration,
+	\item \(\mathcal{M}\) — model architecture and implementation,
+	\item \(\Theta\) — hyperparameters and physical constants,
+	\item \(\mathcal{R}\) — results (metrics, residuals, and artifacts).
+\end{itemize}
+Managing experiments therefore requires version control over all components of \(E\).  
+Tools such as DVC, LakeFS, Feast, and MLflow provide complementary functionality within this framework.
+
+%------------------------------------------------
+\section*{Data Versioning}
+Reproducible research demands that the dataset used for each training run can be reconstructed exactly — down to preprocessing and filtering steps.  
+This is especially critical when dealing with measurement noise, temporal drift, or simulation snapshots in PDE data.
+
+\subsection*{DVC (Data Version Control)}
+\textbf{DVC} extends Git semantics to large datasets.  
+Instead of storing data directly in the repository, it creates lightweight \texttt{.dvc} metafiles containing hashes and remote storage references.
+
+\subsection*{Typical workflow:}
+\begin{verbatim}
+dvc init
+dvc remote add origin s3://research-datasets
+dvc add data/measurements.h5
+git add data/measurements.h5.dvc .gitignore
+git commit -m "Add initial measurement dataset"
+dvc push
+\end{verbatim}
+
+This guarantees that any model training job can reproduce the exact dataset version simply by:
+\begin{verbatim}
+dvc pull
+\end{verbatim}
+
+\subsection*{Integration into the PINN pipeline:}
+Each Airflow/Kubeflow training step begins by running \texttt{dvc pull} to fetch the correct version of \(u(x,y,t)\) measurements before training the inverse heat model.  
+The DVC hash is logged into MLflow as a \texttt{data\_version} parameter for full lineage tracking.
+
+\subsection*{LakeFS}
+\textbf{LakeFS} provides Git-like version control for large-scale object storage (S3, GCS, Azure).  
+It allows creation of isolated data branches for experiments, enabling parallel workflows:
+\begin{itemize}
+	\item \texttt{main} branch for stable, validated datasets.
+	\item \texttt{exp/\#42} branch for experimental preprocessing or noise filtering.
+\end{itemize}
+When an experiment finishes, the branch can be merged into \texttt{main} or discarded.
+
+\subsection*{Example:}
+The research team can branch the raw thermal measurement data into \texttt{exp/pinn-filtered} for preprocessing with spatial smoothing before training the PINN.  
+This ensures that the original raw data remains untouched and fully recoverable.
+
+%------------------------------------------------
+\section*{Feature Stores}
+While DVC and LakeFS handle raw datasets, a \textbf{Feature Store} centralizes precomputed features for model consumption.  
+This is crucial for production models that must ensure feature consistency between training and inference.
+
+\subsection*{Feast}
+\textbf{Feast} (Feature Store) provides:
+\begin{itemize}
+	\item Central registry of feature definitions (e.g., averaged heat flux, boundary gradients).
+	\item Offline store (for training) and online store (for inference) synchronization.
+	\item Consistent versioning and timestamps.
+\end{itemize}
+
+\subsection*{Example:}
+In the PINN inverse heat workflow, precomputed features such as
+\[
+\phi_1(x,y) = \nabla_x u(x,y,t), \quad
+\phi_2(x,y) = \nabla_y u(x,y,t)
+\]
+can be stored in Feast for reuse across experiments with different boundary conditions.  
+The same features are available both to the training container and to real-time simulations served by KServe.
+
+%------------------------------------------------
+\section*{Experiment Tracking with MLflow}
+\textbf{MLflow} serves as the central hub for recording all metadata produced by training runs:
+\begin{itemize}[leftmargin=1.5cm]
+	\item \textbf{Parameters:} hyperparameters, regularization weights, learning rates.
+	\item \textbf{Metrics:} losses, PDE residual norms, validation errors.
+	\item \textbf{Artifacts:} model checkpoints, plots, configuration files.
+	\item \textbf{Tags:} experiment identifiers, dataset versions, and domain parameters.
+\end{itemize}
+
+\subsection*{Example Logging Script.}
+\begin{verbatim}
+with mlflow.start_run(run_name="inverse-heat-a=xy-var"):
+    mlflow.log_param("dataset_hash", dvc_hash)
+    mlflow.log_param("architecture", "PINN-5x128")
+    mlflow.log_param("a_reg", 1e-3)
+    mlflow.log_metric("pde_loss", loss_pde)
+    mlflow.log_metric("bc_loss", loss_bc)
+    mlflow.log_metric("val_residual", residual_norm)
+    mlflow.log_artifact("plots/residual_map.png")
+\end{verbatim}
+
+\subsection*{Model Registry.}
+Trained models can be registered with metadata and version numbers:
+\begin{verbatim}
+mlflow.register_model(
+    "runs:/<run_id>/model",
+    "inverse-heat-pinn"
+)
+\end{verbatim}
+Later stages of the MLOps pipeline (Airflow or Tekton) can promote models between stages (\texttt{Staging} → \texttt{Production}) based on performance metrics.
+
+\subsection*{Structured Experimentation.}
+Tags allow automatic grouping:
+\begin{verbatim}
+mlflow.set_tags({
+    "domain": "heat-inverse",
+    "dataset_branch": "exp/pinn-filtered",
+    "equation": "u_t - div(a grad u) = f",
+    "optimizer": "Adam"
+})
+\end{verbatim}
+
+Experiments can then be queried or visualized via the MLflow UI or API, enabling comparisons across architectures and loss-weight configurations.
+
+%------------------------------------------------
+\section*{Model Lineage and Governance}
+\textbf{Model lineage} traces the complete genealogy of a trained model:
+\[
+\text{Model} \rightarrow (\text{Code Version}, \text{Data Version}, \text{Parameters}, \text{Environment}).
+\]
+Governance extends this with policies for reproducibility, approval, and compliance.
+
+\subsection*{In practice:}
+\begin{itemize}
+	\item \textbf{Code lineage:} captured via Git commit SHA and Docker image tag.
+	\item \textbf{Data lineage:} captured via DVC or LakeFS dataset hashes.
+	\item \textbf{Experiment lineage:} maintained via MLflow runs and registered model versions.
+	\item \textbf{Model approval:} controlled via MLflow Registry stages and CI/CD policies.
+\end{itemize}
+
+\subsection*{Governance Workflow in the PINN Project.}
+\begin{enumerate}
+	\item Each training run logs its dataset version (\texttt{dvc hash}), source commit, and container image.
+	\item Airflow automatically attaches these identifiers as MLflow tags.
+	\item A Tekton or ArgoCD gate promotes models that satisfy physics and validation constraints.
+	\item All promotions are versioned in GitOps repositories for auditability.
+\end{enumerate}
+
+%------------------------------------------------
+\section*{Example: Tracking PINN Experiments for \( a(x,y) \)}
+In the inverse heat problem
+\[
+\partial_t u - \nabla \cdot (a(x,y)\nabla u) = f(x,y,t),
+\]
+the goal is to infer both the thermal diffusivity \(a(x,y)\) and possibly \(f(x,y,t)\) from measured \(u(x,y,t)\).
+
+\subsection*{Experiment setup.}
+\begin{itemize}
+	\item \textbf{Dataset:} generated from simulated or experimental temperature fields, versioned with DVC.
+	\item \textbf{Model:} PINN architecture (\(u_\theta(x,y,t)\)) defined in \texttt{pinn\_model.py}.
+	\item \textbf{Training Script:} \texttt{train.py}, parameterized by network depth, learning rate, and loss weights.
+	\item \textbf{Tracking:} all runs logged to MLflow under the experiment \texttt{inverse-heat-pinn}.
+\end{itemize}
+
+\subsection*{Use Case.}
+Different hypotheses for \(a(x,y)\) (e.g., polynomial vs.\ neural approximation) can be compared through their MLflow runs:
+\begin{itemize}
+	\item Runs grouped by tag \texttt{architecture}.
+	\item Metrics such as PDE residual or boundary violation used for comparison.
+	\item Results visualized as contour plots (logged as artifacts).
+\end{itemize}
+
+\subsection*{Outcome.}
+By combining DVC (data versioning), LakeFS (branching datasets), Feast (feature management), and MLflow (experiment tracking), each PINN run is fully reproducible and scientifically auditable.  
+This enables quantitative comparison of modeling choices, reliable peer verification, and compliant long-term archiving of simulation results.

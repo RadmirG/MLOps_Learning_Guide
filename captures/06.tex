@@ -1,0 +1,259 @@
+\chapter{Deployment and Serving}
+
+\section*{Goal}
+The goal of this chapter is to deploy trained machine learning models in a reproducible, maintainable, and scalable manner.  
+Deployment is the bridge between research and application: a model only becomes useful when it can be reliably consumed by other systems, users, or experiments.  
+In scientific ML, the deployment stage must preserve reproducibility, numerical integrity, and version traceability.
+
+%------------------------------------------------
+\section*{Overview}
+Modern MLOps platforms treat model serving as an operational service that exposes models through standardized APIs.  
+Every deployed model must satisfy:
+\begin{itemize}[leftmargin=1.5cm]
+	\item \textbf{Reproducibility:} the deployed model must match a specific MLflow model version, container hash, and data version.
+	\item \textbf{Scalability:} the service must handle concurrent prediction requests or batch jobs.
+	\item \textbf{Observability:} each prediction and its inputs are logged for auditing and performance analysis.
+\end{itemize}
+
+Model serving can take different forms --- from lightweight REST APIs for experimentation to production-grade serving frameworks integrated with Kubernetes.
+
+%------------------------------------------------
+\section*{Techniques}
+
+\subsection*{REST APIs with FastAPI or Flask}
+For small-scale deployments or prototyping, a REST API is sufficient to expose model inference endpoints.  
+\textbf{FastAPI} is particularly well-suited for ML because it is asynchronous, type-checked, and integrates easily with Docker and Kubernetes.
+
+\subsection{Example FastAPI Service.}
+\begin{verbatim}
+from fastapi import FastAPI
+import torch
+from model import PINNModel
+
+app = FastAPI(title="Inverse Heat PINN")
+
+model = torch.jit.load("pinn_model.pt")
+model.eval()
+
+@app.get("/predict-temperature")
+def predict_temperature(x: float, y: float, t: float):
+    with torch.no_grad():
+        inp = torch.tensor([[x, y, t]], dtype=torch.float32)
+        u = model(inp).item()
+        return {"u(x,y,t)": u}
+\end{verbatim}
+
+\subsection{Dockerfile for Serving.}
+\begin{verbatim}
+FROM python:3.11
+WORKDIR /app
+COPY . .
+RUN pip install fastapi uvicorn torch
+EXPOSE 8080
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8080"]
+\end{verbatim}
+
+The resulting container can be built and run as:
+\begin{verbatim}
+docker build -t pinn-api .
+docker run -p 8080:8080 pinn-api
+\end{verbatim}
+
+\subsection{Usage.}
+A client can query the deployed model via:
+\begin{verbatim}
+curl "http://localhost:8080/predict-temperature?x=0.5&y=0.5&t=0.1"
+\end{verbatim}
+This returns the predicted temperature \(u(x,y,t)\).
+
+%------------------------------------------------
+\subsection*{Model Serving on Kubernetes: KServe and Seldon Core}
+When scaling to production or multi-user environments, manual API services become insufficient.  
+\textbf{KServe} and \textbf{Seldon Core} provide standardized Kubernetes-native serving for ML models.
+
+\subsubsection*{KServe (KFServing)}
+KServe allows deploying models directly from storage backends such as S3 or MLflow Registry without rebuilding containers.
+
+\subsection{Example KServe Deployment.}
+\begin{verbatim}
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: inverse-heat-pinn
+spec:
+  predictor:
+    pytorch:
+      storageUri: s3://mlflow-artifacts/inverse-heat-pinn/Production
+      resources:
+        limits:
+          nvidia.com/gpu: "1"
+          cpu: "2"
+          memory: "8Gi"
+\end{verbatim}
+
+\subsection{Workflow.}
+\begin{enumerate}
+	\item Airflow or Tekton promotes the model in MLflow Registry to \texttt{Production}.
+	\item ArgoCD detects a manifest change in the GitOps repository.
+	\item OpenShift deploys the new \texttt{InferenceService}.
+	\item KServe spins up a dedicated inference Pod with the model mounted from object storage.
+\end{enumerate}
+
+\subsection{Endpoint.}
+Once deployed, KServe automatically exposes an HTTPS route such as:
+\begin{verbatim}
+https://inverse-heat-pinn.apps.openshift.cluster/predict
+\end{verbatim}
+
+A POST request with JSON body:
+\begin{verbatim}
+{
+  "instances": [[0.5, 0.5, 0.1]]
+}
+\end{verbatim}
+returns:
+\begin{verbatim}
+{"predictions": [0.8243]}
+\end{verbatim}
+
+\subsubsection*{Seldon Core}
+\textbf{Seldon Core} is an alternative to KServe with richer model routing, A/B testing, and custom graph definitions.
+
+\subsection{Example Seldon Deployment.}
+\begin{verbatim}
+apiVersion: machinelearning.seldon.io/v1
+kind: SeldonDeployment
+metadata:
+  name: pinn-deployment
+spec:
+  predictors:
+  - name: default
+    replicas: 2
+    graph:
+      name: model
+      implementation: PYTORCH_SERVER
+      modelUri: s3://mlflow-artifacts/inverse-heat-pinn/Production
+    componentSpecs:
+    - spec:
+        containers:
+        - name: model
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+\end{verbatim}
+
+Seldon integrates naturally with OpenShift’s service mesh (Istio) for routing and traffic control between different model versions.
+
+%------------------------------------------------
+\section*{Continuous Deployment (CI/CD)}
+To maintain reliability, model deployment must be integrated into the CI/CD process.
+
+\subsection{Pipeline Example (GitLab CI/CD).}
+\begin{verbatim}
+stages:
+  - build
+  - deploy
+
+build:
+  stage: build
+  script:
+    - docker build -t registry/pinn-api:$CI_COMMIT_SHA .
+    - docker push registry/pinn-api:$CI_COMMIT_SHA
+
+deploy:
+  stage: deploy
+  script:
+    - kubectl apply -f manifests/kserve-inverse-heat.yaml
+  only:
+    - main
+\end{verbatim}
+
+\subsection{Alternative Tools.}
+\begin{itemize}[leftmargin=1.5cm]
+	\item \textbf{Jenkins:} suitable for on-prem clusters and legacy CI/CD pipelines.
+	\item \textbf{Argo CD:} declarative GitOps tool continuously reconciling the live cluster state with Git manifests.
+\end{itemize}
+
+\subsection{Integration with OpenShift.}
+On OpenShift, Tekton and ArgoCD provide native CI/CD and GitOps.  
+Models promoted to the MLflow Registry automatically trigger new pipeline runs that update the deployed inference service.
+
+%------------------------------------------------
+\section*{Deployment Strategies}
+
+\subsection*{Blue-Green Deployment}
+Two identical environments (\texttt{blue} and \texttt{green}) exist concurrently:
+\begin{itemize}
+	\item The \texttt{blue} environment serves current production traffic.
+	\item The \texttt{green} environment deploys the new model.
+\end{itemize}
+Once validation passes, traffic is switched from blue to green.  
+Rollback is instantaneous by redirecting traffic back to the old version.
+
+\subsection{Implementation in OpenShift.}
+Using OpenShift Routes:
+\begin{verbatim}
+oc set route-backends inverse-heat-pinn blue=0 green=100
+\end{verbatim}
+can shift traffic between model versions atomically.
+
+\subsection*{Canary Deployment}
+Instead of a full switch, traffic is gradually shifted to the new model version to monitor stability:
+\begin{verbatim}
+oc set route-backends inverse-heat-pinn blue=90 green=10
+\end{verbatim}
+Monitoring tools (Prometheus, Grafana, Evidently) track error rates, latency, and drift metrics.  
+If no degradation is detected, traffic is progressively increased until the new model fully replaces the old one.
+
+%------------------------------------------------
+\section*{Operational Integration for the PINN Project}
+\subsection{Scenario.}
+After training and validation, a new PINN model for estimating \(a(x,y)\) and \(f(x,y,t)\) is promoted in MLflow and deployed automatically.
+
+\subsection{Pipeline Steps.}
+\begin{enumerate}
+	\item \textbf{Airflow or Tekton} detects new MLflow model promotion.
+	\item \textbf{ArgoCD} synchronizes the updated KServe manifest in Git.
+	\item \textbf{OpenShift} deploys the new inference service with GPU scheduling.
+	\item \textbf{Prometheus/Grafana} monitor inference latency and physical consistency.
+	\item \textbf{Evidently AI} analyzes prediction drift; significant drift triggers retraining.
+\end{enumerate}
+
+\subsection{API Specification for PINN Inference.}
+\begin{verbatim}
+/predict-temperature(x, y, t)
+  Method: GET
+  Input:  float x, y, t
+  Output: float u(x,y,t)
+\end{verbatim}
+
+Example query:
+\begin{verbatim}
+curl "https://inverse-heat-pinn.apps.cluster/predict-temperature?x=0.5&y=0.5&t=0.1"
+\end{verbatim}
+
+\subsection{Response Example.}
+\begin{verbatim}
+{
+  "u(x,y,t)": 0.8243,
+  "model_version": "1.3.2",
+  "data_version": "dvc-8fa23b",
+  "timestamp": "2025-10-20T15:22:17Z"
+}
+\end{verbatim}
+
+The response includes full lineage metadata, enabling complete traceability and reproducibility of scientific predictions.
+
+%------------------------------------------------
+\section*{Summary}
+Model deployment is the culmination of the MLOps lifecycle --- transforming reproducible research artifacts into operational services.  
+For the inverse heat PINN project:
+\begin{itemize}[leftmargin=1.5cm]
+	\item FastAPI enables quick experimentation and REST access.
+	\item KServe and Seldon Core deliver scalable inference on Kubernetes/OpenShift.
+	\item CI/CD systems (GitLab, Jenkins, ArgoCD) automate builds and rollouts.
+	\item Blue-Green and Canary strategies minimize downtime and risk.
+	\item Monitoring (Prometheus, Grafana, Evidently) ensures reliability and retraining triggers.
+\end{itemize}
+
+Through these mechanisms, scientific models evolve into robust, production-grade services that remain explainable, auditable, and continuously improvable.

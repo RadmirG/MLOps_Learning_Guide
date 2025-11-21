@@ -1,0 +1,214 @@
+\chapter{Pipelines and Automation}
+
+\section*{Goal}
+The goal of this chapter is to design fully automated workflows that connect all components of the MLOps ecosystem --- from data ingestion to model deployment.  
+Automation ensures that every experiment, retraining, and deployment follows a repeatable, versioned process without manual intervention.  
+In the context of scientific ML, such automation also supports reproducibility, traceability, and continuous scientific improvement.
+
+%------------------------------------------------
+\section*{Motivation}
+Machine learning pipelines are often complex, involving data validation, model training, evaluation, and deployment across heterogeneous systems.  
+Manual orchestration is error-prone, difficult to reproduce, and does not scale.  
+Automated pipelines encapsulate this complexity into declarative, executable workflows.
+
+A well-designed MLOps pipeline transforms an idea into a measurable experiment:
+\[
+\text{Data Ingestion} \rightarrow \text{Training} \rightarrow \text{Evaluation} \rightarrow \text{Deployment} \rightarrow \text{Monitoring}.
+\]
+
+These steps form a continuous feedback loop for improving both model accuracy and operational robustness.
+
+%------------------------------------------------
+\section*{Tools and Orchestration Layers}
+Automation in MLOps typically involves multiple layers of orchestration:
+
+\subsection*{Airflow DAGs (Directed Acyclic Graphs)}
+\textbf{Apache Airflow} is a general-purpose workflow orchestrator.  
+It defines pipelines as DAGs where each node represents a task (e.g., data preprocessing, training, evaluation).  
+Airflow provides:
+\begin{itemize}[leftmargin=1.5cm]
+	\item Python-based pipeline definition.
+	\item Rich scheduling and dependency management.
+	\item Integration with Kubernetes and external services.
+	\item Fine-grained monitoring through the Airflow Web UI.
+\end{itemize}
+
+\subsection{Conceptual Role.}
+Airflow is the high-level \emph{conductor} coordinating the entire workflow.  
+It can trigger Kubeflow Pipelines, Tekton pipelines, or even shell scripts for specialized tasks.
+
+\subsection*{Kubeflow Pipelines}
+\textbf{Kubeflow Pipelines (KFP)} run machine learning tasks natively on Kubernetes/OpenShift.  
+Each step in a pipeline is a containerized component, ensuring reproducibility and scalability.
+
+\subsection{Capabilities.}
+\begin{itemize}[leftmargin=1.5cm]
+	\item Parameterized training and hyperparameter tuning.
+	\item Distributed GPU/CPU scheduling.
+	\item Integration with MLflow, S3, or MinIO artifact storage.
+	\item Execution history with visualization of DAGs and metrics.
+\end{itemize}
+
+In the context of the inverse heat problem, a Kubeflow Pipeline might include:
+\begin{enumerate}
+	\item Fetching and validating temperature datasets.
+	\item Launching the PINN training container on GPU nodes.
+	\item Logging metrics and residuals to MLflow.
+	\item Evaluating physics-based losses.
+	\item Registering the best-performing model.
+\end{enumerate}
+
+\subsection*{Tekton / Argo Workflows}
+\textbf{Tekton} (OpenShift Pipelines) and \textbf{Argo Workflows} implement pipelines declaratively using YAML or JSON specifications.
+
+\subsection{Advantages.}
+\begin{itemize}[leftmargin=1.5cm]
+	\item Pipelines are stored in Git --- enabling versioned, auditable, and declarative automation (GitOps).
+	\item Each task runs as a Kubernetes Pod, scaling automatically.
+	\item Seamless integration with CI/CD systems (e.g., GitLab or Jenkins).
+\end{itemize}
+
+\subsection{Example:}
+A Tekton pipeline in OpenShift could express the same PINN training workflow as a sequence of tasks:
+\begin{verbatim}
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: inverse-heat-pinn
+spec:
+  tasks:
+  - name: fetch-data
+    taskRef: { name: dvc-fetch }
+  - name: train
+    runAfter: ["fetch-data"]
+    taskRef: { name: pinn-train }
+  - name: evaluate
+    runAfter: ["train"]
+    taskRef: { name: evaluate-metrics }
+  - name: register
+    runAfter: ["evaluate"]
+    taskRef: { name: mlflow-register }
+  - name: deploy
+    runAfter: ["register"]
+    taskRef: { name: kserve-deploy }
+\end{verbatim}
+
+\subsection{Execution Context.}
+Each task in this pipeline runs in an isolated container with its own resource request (e.g., GPU, CPU, memory).  
+This separation ensures reproducibility and efficient utilization of compute clusters.
+
+%------------------------------------------------
+\section*{Automated Retraining and Evaluation}
+Scientific ML systems often operate on time-dependent or evolving data.  
+Automated retraining ensures that the model remains accurate and consistent as new observations are collected.
+
+\subsection{Triggering mechanisms.}
+\begin{itemize}[leftmargin=1.5cm]
+	\item \textbf{Time-based retraining:} Airflow schedules a pipeline (e.g., daily or weekly).
+	\item \textbf{Event-based retraining:} A new dataset commit (DVC push or LakeFS merge) triggers Tekton/Argo.
+	\item \textbf{Drift-based retraining:} Monitoring systems (Evidently AI or Prometheus alerts) detect data or model drift and trigger retraining automatically.
+\end{itemize}
+
+\subsection{Evaluation.}
+Every retraining run is evaluated using both statistical and physical metrics:
+\[
+\mathcal{L}_{\text{total}} = w_{\text{PDE}}\mathcal{L}_{\text{PDE}} + 
+w_{\text{BC}}\mathcal{L}_{\text{BC}} + 
+w_{\text{IC}}\mathcal{L}_{\text{IC}}.
+\]
+Metrics are logged in MLflow and visualized in dashboards.  
+If a model’s residuals or validation errors exceed thresholds, the deployment gate prevents promotion.
+
+%------------------------------------------------
+\section*{Validation and Deployment Gating}
+Before a trained model is moved into production, automated gates ensure it satisfies quantitative and physical constraints.
+
+\subsection{Example Gate Policy (Airflow Task).}
+\begin{verbatim}
+def validate_model(**context):
+    run_id = context["ti"].xcom_pull(task_ids="train_pinn")
+    metrics = mlflow_client.get_run(run_id).data.metrics
+    if metrics["pde_loss"] < 1e-3 and metrics["val_residual"] < 1e-2:
+        promote_to_registry(run_id)
+    else:
+        raise AirflowSkipException("Model does not meet quality thresholds.")
+\end{verbatim}
+
+This ensures that only physically consistent PINN models (those that respect the PDE constraints) are eligible for deployment.
+
+\subsection{Integration with GitOps.}
+After validation, the pipeline commits an updated model manifest (e.g., KServe \texttt{InferenceService}) into the GitOps repository.  
+Argo CD detects this change and deploys the new model automatically on OpenShift.
+
+%------------------------------------------------
+\section*{Example Airflow DAG}
+The following DAG captures the complete inverse heat pipeline:
+
+\begin{verbatim}
+@dag(schedule_interval="@daily", catchup=False)
+def heat_inverse_pipeline():
+    load_data()        # DVC pull or LakeFS branch checkout
+    preprocess()       # data normalization, feature extraction (Feast)
+    train_pinn()       # launch GPU training container
+    evaluate_model()   # compute physics-informed residuals
+    register_model()   # push to MLflow registry
+    validate_model()   # gating based on thresholds
+    deploy_model()     # trigger KServe or Tekton deploy
+
+pipeline = heat_inverse_pipeline()
+\end{verbatim}
+
+This pipeline can run either as a local Airflow DAG or as a hybrid Airflow–Kubeflow integration, where Airflow orchestrates while Kubeflow executes GPU-heavy tasks.
+
+%------------------------------------------------
+\section*{Automated Deployment on OpenShift}
+\begin{itemize}[leftmargin=1.5cm]
+	\item The training container image (\texttt{pinn-trainer}) is built and stored in OpenShift’s internal registry.
+	\item Tekton or ArgoCD pipelines deploy the latest approved model to a dedicated namespace (e.g., \texttt{ml-prod}).
+	\item KServe reads the MLflow artifact and creates a scalable inference service with GPU access.
+	\item Monitoring dashboards (Prometheus/Grafana) collect latency and drift metrics.
+\end{itemize}
+
+\subsection{Example KServe Manifest.}
+\begin{verbatim}
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: inverse-heat-pinn
+spec:
+  predictor:
+    pytorch:
+      storageUri: s3://mlflow-artifacts/inverse-heat/Production
+      resources:
+        limits: { nvidia.com/gpu: "1", cpu: "2", memory: "8Gi" }
+\end{verbatim}
+
+%------------------------------------------------
+\section*{Continuous Integration and Delivery (CI/CD)}
+\textbf{CI/CD} ties the automation loop together:
+\begin{itemize}[leftmargin=1.5cm]
+	\item Code commits trigger automated builds of Docker images (CI).
+	\item Successful builds push manifests and configurations into Git (CD).
+	\item Argo CD or Tekton automatically synchronizes and deploys these changes into the OpenShift cluster.
+\end{itemize}
+
+\subsection{Benefits for the PINN Project.}
+\begin{itemize}[leftmargin=1.5cm]
+	\item Every change in PDE configuration or loss term becomes versioned and traceable.
+	\item Model retraining and validation are fully automated.
+	\item Deployment gates guarantee only physically consistent models reach production.
+\end{itemize}
+
+%------------------------------------------------
+\section*{Summary}
+Automated pipelines form the \emph{operational nervous system} of an MLOps platform.  
+For the inverse heat PINN project:
+\begin{itemize}[leftmargin=1.5cm]
+	\item Airflow orchestrates the end-to-end experiment lifecycle.
+	\item Kubeflow Pipelines execute containerized training and tuning.
+	\item Tekton and Argo ensure declarative, auditable automation.
+	\item Validation gates enforce physics-based constraints before promotion.
+	\item OpenShift hosts the entire automation stack with integrated CI/CD, GPU scheduling, and monitoring.
+\end{itemize}
+
+This combination provides a reproducible, automated, and scientifically verifiable infrastructure for continuous PINN experimentation and deployment.

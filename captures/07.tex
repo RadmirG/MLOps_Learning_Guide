@@ -1,0 +1,228 @@
+\chapter{Monitoring, Drift, and Retraining}
+\subsection*{Goal}
+Implement continuous monitoring and feedback loops for deployed models.
+
+\subsection*{Topics}
+\begin{itemize}[leftmargin=1.5cm]
+	\item Types of drift:
+	\begin{itemize}
+		\item Data Drift
+		\item Concept Drift
+		\item Model Drift
+	\end{itemize}
+	\item Monitoring tools:
+	\begin{itemize}
+		\item Prometheus
+		\item Grafana
+		\item Evidently AI
+		\item WhyLabs
+	\end{itemize}
+	\item Retraining automation and alerting mechanisms.
+\end{itemize}
+
+
+
+\chapter{Monitoring, Drift, and Retraining}
+\subsection*{Goal}
+Implement continuous monitoring and feedback loops for deployed models.
+
+\subsection*{What to monitor (start simple)}
+\begin{enumerate}
+  \item \textbf{Service health:} latency, throughput, error rate.
+  \item \textbf{Prediction quality:} task metrics (e.g.\ MSE of temperature), confidence/uncertainty.
+  \item \textbf{Data properties:} input ranges and distribution summaries.
+  \item \textbf{Domain/PDE signals (PINN):} average PDE residual, boundary condition violations, physical constraint counters.
+\end{enumerate}
+
+\subsection*{Types of drift}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Data Drift} (covariate shift): $p_\text{serving}(x)$ deviates from $p_\text{train}(x)$.
+  \item \textbf{Concept Drift}: $p(y\mid x)$ changes (same inputs, different temperature outcomes).
+  \item \textbf{Model Drift}: model parameters or calibration degrade over time even if data seems similar.
+\end{itemize}
+
+\subsection*{Minimal signals and thresholds (practical defaults)}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Latency (p95)} $< 200$\,ms; \textbf{Error rate} $< 0.1\%$.
+  \item \textbf{Input sanity}: percent of $(x,y,t)$ outside training bounds $< 1\%$.
+  \item \textbf{Data drift}: PSI (Population Stability Index) for each feature $< 0.2$.
+  \item \textbf{PINN physics}: mean PDE residual $\overline{R_{\text{PDE}}} < \tau$.
+\end{itemize}
+
+\subsection*{Monitoring tools}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Prometheus:} scrapes numeric metrics.
+  \item \textbf{Grafana:} dashboards/alerts on Prometheus.
+  \item \textbf{Evidently AI:} computes drift/statistics and generates reports.
+  \item \textbf{WhyLabs:} managed monitoring/logging for data \& ML.
+\end{itemize}
+
+\section*{Step 1 — Instrument the PINN service (Prometheus)}
+
+\begin{lstlisting}[language=Python, caption={FastAPI metrics for the PINN service}]
+from fastapi import FastAPI
+from prometheus_client import Counter, Gauge, Histogram, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
+from starlette.responses import Response
+import time
+
+app = FastAPI()
+
+# Service-level metrics
+REQS = Counter("pinn_requests_total", "Total inference requests")
+ERRS = Counter("pinn_errors_total", "Total inference errors")
+LAT  = Histogram("pinn_latency_seconds", "Latency per request (s)")
+
+# Data + physics metrics
+OUT_OF_RANGE = Gauge("pinn_inputs_oob_ratio", "Ratio of inputs outside training bounds")
+PDE_RES_MEAN = Gauge("pinn_pde_residual_mean", "Mean PDE residual")
+BC_VIOL = Gauge("pinn_bc_violation_ratio", "Boundary condition violation rate")
+
+@app.get("/metrics")
+def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+@app.post("/predict-temperature")
+def predict(item: dict):
+    start = time.time(); REQS.inc()
+    try:
+        # ... compute u(x,y,t) and PDE residual ...
+        OUT_OF_RANGE.set(item["oob_ratio"])
+        PDE_RES_MEAN.set(item["r_pde_mean"])
+        BC_VIOL.set(item["bc_violation_ratio"])
+        return {"u": 42.0}
+    except Exception:
+        ERRS.inc()
+        raise
+    finally:
+        LAT.observe(time.time() - start)
+\end{lstlisting}
+
+\noindent Kubernetes annotation to enable scraping:
+\begin{verbatim}
+metadata:
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8080"
+\end{verbatim}
+
+\section*{Step 2 — Grafana: useful panels}
+
+\begin{itemize}
+  \item Latency p95:
+  \begin{verbatim}
+histogram_quantile(0.95, sum(rate(pinn_latency_seconds_bucket[5m])) by (le))
+  \end{verbatim}
+  \item Error rate:
+  \begin{verbatim}
+rate(pinn_errors_total[5m]) / rate(pinn_requests_total[5m])
+  \end{verbatim}
+  \item PDE residual trend:
+  \begin{verbatim}
+pinn_pde_residual_mean
+  \end{verbatim}
+\end{itemize}
+
+\noindent Example alert rules:
+\begin{verbatim}
+pinn_inputs_oob_ratio > 0.05 for 15m   -> Data shift
+pinn_pde_residual_mean > tau for 15m   -> Physics degradation
+error_rate > 0.005 for 10m             -> Serving issue
+\end{verbatim}\dfrac{num}{den}
+
+\section*{Step 3 — Batch drift reports (Evidently)}
+
+\begin{lstlisting}[language=Python, caption={Evidently data drift detection job}]
+import pandas as pd
+from evidently.report import Report
+from evidently.metric_preset import DataDriftPreset
+
+ref = pd.read_parquet("s3://ml/heat/reference.parquet")
+cur = pd.read_parquet("s3://ml/heat/current.parquet")
+
+report = Report(metrics=[DataDriftPreset()])
+report.run(reference_data=ref, current_data=cur)
+report.save_html("drift_report.html")
+
+json = report.as_dict()
+psi_ok = all(m["result"]["dataset_drift"] is False for m in json["metrics"]
+             if "dataset_drift" in str(m["result"]))
+if not psi_ok:
+    open("/tmp/DRIFT_FLAG", "w").write("data_drift\n")
+\end{lstlisting}
+
+\subsection*{What to feed Evidently (PINN):}
+\begin{itemize}
+  \item Features: $(x,y,t)$.
+  \item Targets: measured $u^\ast$ to compute residual metrics.
+  \item Physics metrics: $R_{\text{PDE}}$, boundary condition violation rate.
+\end{itemize}
+
+\section*{Step 4 — Automatic retraining hooks}
+
+\begin{lstlisting}[language=Python, caption={Airflow DAG for drift → retrain → deploy}]
+@dag(schedule_interval="*/30 * * * *", catchup=False)
+def monitor_and_retrain():
+    drift = BashOperator(
+        task_id="compute_drift",
+        bash_command="python drift_report.py && test ! -f /tmp/DRIFT_FLAG"
+    )
+    retrain = BashOperator(
+        task_id="train_pinn",
+        bash_command="python train_pinn.py --exp mlops --out /mlruns"
+    )
+    eval_gate = BashOperator(
+        task_id="eval_gate",
+        bash_command="python eval_gate.py --min_pde <TAU> --max_mse <EPS>"
+    )
+    register = BashOperator(
+        task_id="register_model",
+        bash_command="python mlflow_register.py --stage Staging"
+    )
+    deploy = BashOperator(
+        task_id="deploy",
+        bash_command="python deploy_kserve.py --from-registry"
+    )
+    retrain.trigger_rule = "one_failed"
+    drift >> [retrain, eval_gate]
+    retrain >> eval_gate >> register >> deploy
+\end{lstlisting}
+
+\subsection*{Evaluation gates (PINN-aware)}
+\begin{itemize}[leftmargin=1.5cm]
+  \item \textbf{Offline:} MSE, physics residual, BC violation rate.
+  \item \textbf{Shadow:} route small traffic slice to candidate.
+  \item \textbf{Promotion:} only if improvement $>$ threshold.
+\end{itemize}
+
+\section*{Step 5 — Alerts to orchestration}
+\begin{itemize}[leftmargin=1.5cm]
+  \item Prometheus Alertmanager $\rightarrow$ webhook triggers Airflow or Argo run.
+  \item Grafana alerts $\rightarrow$ HTTP webhook for retraining DAG.
+  \item On OpenShift: use a CronJob for drift check, store \texttt{drift\_report.html}, expose via Route.
+\end{itemize}
+
+\section*{Step 6 — SLOs and Runbooks}
+\begin{itemize}[leftmargin=1.5cm]
+  \item SLOs: latency $<200$\,ms, error $<0.1\%$, OOB $<1\%$, $\overline{R_{\text{PDE}}}<\tau$.
+  \item Alerts: thresholds, durations, owners.
+  \item Runbook: rollback (ArgoCD, KServe), validation checklist.
+\end{itemize}
+
+\section*{Example (PINN inverse heat)}
+\begin{itemize}
+  \item Online: fast signals (PDE residual, input domain).
+  \item Batch: drift reports on $(x,y,t)$, $u^\ast$, and physics terms.
+  \item MLflow: compare runs by tags (network depth, PDE weight).
+\end{itemize}
+
+\section*{Final loop summary}
+\begin{enumerate}
+  \item Instrument metrics (Prometheus).
+  \item Dashboard \& alert (Grafana).
+  \item Run nightly drift check (Evidently).
+  \item Airflow DAG: drift → retrain → eval → register → deploy.
+  \item Promotion gate: no physics regression.
+  \item Full audit via MLflow \& GitOps.
+\end{enumerate}

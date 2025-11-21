@@ -1,0 +1,116 @@
+\documentclass[bachelor,english]{hgbthesis}
+% Zulässige Class Options: 
+%   Typ der Arbeit: diplom, master (default), bachelor, praktikum 
+%   Hauptsprache: german (default), english
+%%------------------------------------------------------------
+
+%------------------------------------------------------------------------
+% meine Packages
+%------------------------------------------------------------------------
+\usepackage{framed}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\usepackage{algorithm}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{decorations.pathreplacing}
+\usetikzlibrary{positioning, shapes.geometric, arrows}
+\usetikzlibrary{shapes, arrows.meta, positioning}
+\usepackage{chngcntr}
+\counterwithout{footnote}{chapter}
+\usepackage{mathrsfs}
+\usepackage{algorithm}
+\usepackage{amsthm }
+\usepackage[all,cmtip]{xy}
+\usepackage[
+%showframe,% Seitenlayout anzeigen
+left=3cm,
+right=3cm,
+top=3cm,
+bottom=2.5cm,
+%includeheadfoot
+]{geometry}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{listings}
+\usepackage{framed}
+\usepackage{extarrows}
+\usepackage{subfig}
+\usepackage{booktabs}
+\usepackage[table]{xcolor}
+\usepackage{colortbl}
+
+
+%------------------------------------------------------------------------
+% meine Packages
+%------------------------------------------------------------------------
+
+\newcommand{\MATLAB}{\textsc{Matlab}\xspace}
+
+
+\usepackage[framed,mlscaleinline=true]{matlab-prettifier}
+
+\lstMakeShortInline[style=Matlab-editor]@
+\lstnewenvironment{matlab}{\lstset{
+		style=Matlab-editor,
+		basicstyle=\color{black}\ttfamily\tiny
+}}{}
+
+\newtheorem{theorem}{Satz}
+\newtheorem{lemma}{Lemma}
+\newtheorem{Definition}{Definition}
+\newtheorem{Bemerkung}{Bemerkung}
+\newcommand{\uproman}[1]{\uppercase\expandafter{\romannumeral#1}}
+\newcommand{\lowroman}[1]{\romannumeral#1\relax}
+\newcommand{\captionstring}[1]{\noexpand\noexpand\noexpand\string\string#1}
+\definecolor{lightgray}{gray}{0.9}
+\lstdefinestyle{BashStyle}{
+	backgroundcolor=\color{lightgray},
+	basicstyle=\ttfamily\footnotesize,
+	breaklines=true,
+	frame=single,
+	keywordstyle=\color{blue},
+	commentstyle=\color{gray},
+	stringstyle=\color{red}
+}
+\newcommand\Cpp{C\texttt{++}}
+
+\lstdefinestyle{BashStyle}{
+	backgroundcolor=\color{lightgray},
+	basicstyle=\ttfamily\footnotesize,
+	breaklines=true,
+	frame=single,
+	keywordstyle=\color{blue},
+	commentstyle=\color{gray},
+	stringstyle=\color{red}
+}
+\definecolor{lightgray}{gray}{0.9}
+%----------------------------------------------------------------------------------------------------------
+
+\graphicspath{{images/}}    % Bilder
+\bibliography{literatur}  	% BibTeX-Datei
+
+% Title
+\title{\textbf{MLOps Learning Guide}\\A Modular Framework for Scientific Machine Learning}
+\author{Radmir Gesler}
+\date{\today}
+
+\begin{document}
+	\frontmatter % römische Zahlen für Seitennummern
+	\thispagestyle{empty}
+	\include{captures/00_01_frontmatter}
+	%--------------------------------------------------------
+	\include{captures/0 0}	
+	\tableofcontents	% Inhaltsverzeichnis	
+	%--------------------------------------------------------
+	\mainmatter % Hauptteil (ab hier arab. Seitenzahlen)
+	\include{captures/01}
+	\include{captures/02}
+	\include{captures/03}
+	\include{captures/04}
+	\include{captures/05}
+	\include{captures/06}
+	\include{captures/07}
+    % Sample citation to ensure references are included
+    \cite{gPINNs21}
+\end{document}
