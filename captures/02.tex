@@ -7,103 +7,374 @@ We will distinguish between the research-oriented workflow typical for data scie
 MLOps aims to close the gap between experimental model development and robust, automated, and maintainable production environments. It provides the methodological and technological foundation for \textit{reproducible, automated, and continuously improved} ML systems.
 
 %------------------------------------------------
-\section*{Motivation}
-In traditional ML practice, models are trained and evaluated manually, often in Jupyter notebooks, on local data subsets. This works well for research and prototyping but fails when moving toward production due to:
+\subsubsection*{Motivation}
+In traditional ML practice, models are trained and evaluated manually, often in Jupyter notebooks, on local data subsets. This works well for research and prototyping but fails when moving toward production due to:\\
 \begin{itemize}
 	\item Lack of reproducibility (no fixed data versions, ad-hoc code changes).
 	\item Manual retraining and deployment steps.
 	\item Missing automation, monitoring, and feedback loops.
-	\item Divergence between training and production environments.
+	\item Divergence between training and production environments. \\
 \end{itemize}
 
 MLOps introduces structure and automation similar to software engineering. It formalizes how models are trained, validated, deployed, monitored, and retrained, thus ensuring both scientific rigor and operational reliability.
 
 %------------------------------------------------
-\section*{Core Concepts}
+\section{Core Concepts}
 
-\subsection*{ML Research vs. ML Engineering}
+\subsubsection*{ML Research vs. ML Engineering}
+
+The difference between ML Research and ML Engineering can discussed as it shown in the table \ref{tab:2.1}. But we can summarize it also as: \\
+ 
 \begin{itemize}
 	\item \textbf{ML Research:} Focuses on designing algorithms, optimizing architectures, and proving performance improvements on benchmark datasets. The emphasis is on exploration, hypothesis testing, and innovation.
-	\item \textbf{ML Engineering:} Concerned with building reliable, scalable, and maintainable ML systems. The emphasis is on reproducibility, continuous integration, monitoring, and lifecycle management.
-\end{itemize}
+	\item \textbf{ML Engineering:} Concerned with building reliable, scalable, and maintainable ML systems. The emphasis is on reproducibility, continuous integration, monitoring, and lifecycle management.\\
+\end{itemize} 
 
-While ML research is often experimental, ML engineering requires controlled processes and automation — comparable to the relationship between theoretical science and industrial engineering.
+While ML research is often experimental, ML engineering requires controlled processes and automation — comparable to the relationship between theoretical science and industrial engineering. \\
 
-%------------------------------------------------
-\subsection*{Why Models in Jupyter Notebooks Are Not Production-Ready}
-Jupyter notebooks are excellent for interactive exploration but have inherent limitations:
+\begin{table}[h]
+	\centering
+	\begin{tabular}{p{3cm}|p{5.5cm}|p{5.5cm}}		
+		\textbf{Aspect} & \textbf{ML Research} & \textbf{ML Engineering} \\
+		\hline
+		Primary goal & 
+		Designing new algorithms and methods & 
+		Building reliable, scalable, and production-ready ML systems \\
+		\hline
+		Focus & 
+		Exploration, hypothesis testing, model innovation & 
+		System robustness, reproducibility, lifecycle management \\
+		\hline
+		Typical questions & 
+		``Can we improve accuracy?'' \newline ``Does this architecture generalize better?'' & 
+		``Can we deploy and maintain this reliably?'' \newline ``How does it behave in production?'' \\
+		\hline
+		Success criteria & 
+		Performance on benchmarks, novel contributions & 
+		Stability, scalability, maintainability, and monitoring effectiveness \\
+		\hline
+		Key activities & 
+		Experimentation, algorithm design, empirical evaluation & 
+		CI/CD integration, monitoring, retraining, versioning, deployment \\
+		\hline
+		Main emphasis & 
+		Innovation and theory & 
+		Infrastructure and operational excellence \\
+	\end{tabular}
+	\caption{Comparison between Machine Learning Research and Machine Learning Engineering}
+	\label{tab:2.1}
+\end{table}
+
+As an example we will show why a Jupiter Notebook isn't a production system. Jupyter notebooks are excellent for interactive exploration but have inherent limitations: \\
+
 \begin{itemize}
 	\item They lack version control for data and parameters.
 	\item Execution order is not guaranteed, leading to hidden state issues.
 	\item Manual execution cannot scale or be monitored.
-	\item Integration with CI/CD, monitoring, and production APIs is minimal.
+	\item Integration with CI/CD, monitoring, and production APIs is minimal. \\
 \end{itemize}
 A notebook is a sandbox; production requires \textit{pipelines}, \textit{versioned artifacts}, and \textit{infrastructure integration}.
 
 %------------------------------------------------
-\subsection*{The MLOps Pyramid}
+\section{The MLOps Pyramid}
 
-The conceptual structure of MLOps can be represented as a pyramid of five interdependent layers:
+The conceptual structure of MLOps can be represented as a pyramid of five interdependent layers: \\
 
 \begin{enumerate}
 	\item \textbf{Data Layer:} Reliable data ingestion, validation, and versioning. Tools such as DVC, LakeFS, or Delta Lake ensure reproducibility of datasets.
 	\item \textbf{Model Layer:} Training, tracking, and storing models in registries (e.g., MLflow, ModelDB). This layer provides reproducible artifacts.
 	\item \textbf{CI/CD Layer:} Continuous Integration and Continuous Deployment pipelines (e.g., GitLab CI, Jenkins, ArgoCD) automate testing and release cycles.
 	\item \textbf{Monitoring Layer:} Continuous observation of models in production (Prometheus, Grafana, Evidently AI). Detects performance degradation and drift.
-	\item \textbf{Governance Layer:} Enforces compliance, audit trails, explainability, and ethical considerations for model usage.
+	\item \textbf{Governance Layer:} Enforces compliance, audit trails, explainability, and ethical considerations for model usage. \\
 \end{enumerate}
 
-Each layer builds upon the previous one, forming a hierarchy of reproducibility and automation — from raw data to responsible deployment.
+All the points above are summarized in the figure \ref{fig:2.1} as an image impression of the structural dependence of all components. \\
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[
+		font=\small,
+		layer/.style={
+			trapezium,
+			trapezium stretches=true,
+			draw,
+			rounded corners=1pt,
+			align=center,
+			minimum height=1.1cm,
+			fill=gray!5
+		}
+		]
+		
+		% --- Data (base) ---
+		\node[layer, minimum width=14cm] (data) {
+			\textbf{Data Layer}\\
+			Data ingestion, validation, versioning,
+			DVC, LakeFS, Delta Lake
+		};
+		
+		% --- Model ---
+		\node[layer, minimum width=12cm, above=0.35cm of data] (model) {
+			\textbf{Model Layer}\\
+			Training, tracking, model registries, MLflow, ModelDB
+		};
+		
+		% --- CI/CD ---
+		\node[layer, minimum width=10cm, above=0.35cm of model] (cicd) {
+			\textbf{CI/CD Layer}\\
+			Continuous integration \& deployment, GitLab CI \\ Jenkins, ArgoCD
+		};
+		
+		% --- Monitoring ---
+		\node[layer, minimum width=3cm, above=0.35cm of cicd] (monitoring) {
+			\textbf{Monitoring Layer}\\
+			Production monitoring and \\ drift detection\\
+			Prometheus, Grafana, Evidently AI
+		};
+		
+		% --- Governance (top) ---
+		\node[layer, minimum width=4cm, above=0.35cm of monitoring] (gov) {
+			\textbf{Governance Layer}\\
+			Compliance, audit,\\
+			ethics, explainability
+		};
+		
+	\end{tikzpicture}
+	\caption{Conceptual MLOps pyramid with interdependent layers from data management to governance.}
+	\label{fig:2.1}
+\end{figure}
+
+Each layer builds upon the previous one, forming a hierarchy of reproducibility and automation — from raw data to responsible deployment. We will keep it in mind and dive deeper in the next part of current text to understand what the key principle of MLOps are.
 
 %------------------------------------------------
-\subsection*{Key Principles of MLOps}
+\subsection{Key Principles of MLOps}
 MLOps is driven by several foundational principles:
 
-\subsection*{Reproducibility.}
+\subsubsection*{Reproducibility.}
 Every experiment, dataset, model, and environment must be uniquely identifiable and reproducible at any time. This ensures scientific integrity and traceability.
 
-\subsection*{Automation (Pipelines).}
+\subsubsection*{Automation (Pipelines).}
 Training, validation, and deployment steps should be automated via pipelines (Airflow, Kubeflow, Tekton). Manual intervention is minimized.
 
-\subsection*{Version Control.}
+\subsubsection*{Version Control.}
 Not only source code, but also data, model parameters, and configurations must be versioned. Git is extended by tools like DVC and MLflow registries.
 
-\subsection*{Continuous Training (CT).}
+\subsubsection*{Continuous Training (CT).}
 Analogous to Continuous Integration in software, models are retrained continuously as new data becomes available, keeping them current with evolving environments.
 
-\subsection*{Model Drift and Retraining.}
-Deployed models degrade as data distributions shift (``drift''). MLOps integrates drift detection, monitoring, and automated retraining workflows.
+\subsubsection*{Model Drift and Retraining.}
+Deployed models degrade as data distributions shift (``drift''). MLOps integrates drift detection, monitoring, and automated retraining workflows. \\
 
-%------------------------------------------------
-\section*{Example: Scientific Machine Learning (PINNs)}
+While, I guess all points are intuitively understandable, but the \textit{Model Drift} isn't. In the next part we will shortly introduce this phenomena.  
+
+\subsection{Model Drift and Automated Retraining}
+
+Deployed machine learning models operate in non-stationary environments. While the training process assumes that the joint distribution 
+\[
+P_{\text{train}}(X,Y) \approx P_{\text{future}}(X,Y),
+\]
+this assumption breaks down as physical conditions, data acquisition processes, or system dynamics evolve over time. \\
+
+Such changes lead to \textbf{\emph{Model Drift}}, i.e., a degradation of predictive performance and physical consistency if no corrective mechanisms are introduced.
+
+
+\subsubsection*{Types of Drift}
+
+Model degradation can be categorized into three fundamental drift classes: \\
+
+\begin{itemize}
+	\item \textbf{Data Drift (Covariate Shift):}  
+	The marginal input distribution changes while the underlying mapping remains stable:
+	\[
+	P_{\text{train}}(X) \neq P_{\text{live}}(X), \quad P(Y \mid X) \approx \text{const}.
+	\]
+	This can be detected using statistical divergence measures such as the Kolmogorov–Smirnov test, Population Stability Index (PSI), or Wasserstein distance.
+	
+	\item \textbf{Concept Drift:}  
+	The conditional distribution changes:
+	\[
+	P_{\text{train}}(Y \mid X) \neq P_{\text{live}}(Y \mid X),
+	\]
+	which may occur in physical systems due to material aging, changing system dynamics, or updated operational conditions.
+	
+	\item \textbf{Model Drift:}  
+	Even if the environment is stable, the model may become miscalibrated or insufficient due to limited capacity, dataset bias, or evolving rare events. \\
+\end{itemize}
+
+This overview should be enough to get the idea behind Model Drift, for more deeply information see the chapter \ref{cha:7}.
+
+\section*{Summary}
+
+In the context of this work, MLOps bridges the gap between experimental machine learning research and production-grade machine Learning systems.  
+It introduces a rigorous lifecycle based on versioned data, tracked experiments, automated pipelines, continuously monitored deployments, and governed model operation. \\
+
+Beyond the conceptual illustration of MLOps, the current work is accompanied by a concrete example derived from my master’s thesis. 
+The objective of that thesis was to develop a machine learning procedure for solving an \textit{inverse heat conduction problem}, specifically to estimate a \textit{spatially dependent thermal diffusivity field}. 
+In this work, this approach is extended into an MLOps context, with the goal of designing a production-capable system for predicting thermal diffusivity using automated and reproducible machine learning workflows. \\
+
+In the context of machine learning for physical system modeling, several approaches exist. 
+One particularly relevant method is the class of \textit{Physics-Informed Neural Networks} (PINNs). 
+During my thesis, I developed a PINN to solve the above-mentioned inverse heat problem. 
+This method and its theoretical foundation will be briefly introduced in the following section.
+
+
+\section{Example: Scientific Machine Learning (PINNs)}
 
 To illustrate, consider the inverse heat conduction problem:
 \[
 \partial_t u - \nabla \cdot (a(x,y)\nabla u) = f(x,y,t),
 \]
-where the goal is to infer the spatially varying diffusivity \(a(x,y)\) and possibly the source term \(f(x,y,t)\) from observed temperature data \(u(x,y,t)\).
+where the goal is to infer the spatially varying diffusivity \(a(x,y)\) and possibly the source term \(f(x,y,t)\) from observed temperature data \(u(x,y,t)\).\\
 
-\subsubsection*{Without MLOps}
+The developed PINN system can be summarized as it is done in figure \ref{fig:2.2}. If some is more interested in details of my work please see \cite{Gesler_2025}. But for the terms of ML the Loss equations are important should be introduced here:
+
+\begin{align}
+	\mathcal{L}_{u_\text{D}} = \frac{1}{m} \| \hat{u}_l - u_D\|^2_2   \\
+	\mathcal{L}_{f_\text{D}} = \frac{1}{m} \| \hat{f}_l - f_D \|^2_2
+\end{align}
+
+The above loss functions are used to train the models for the temperature $u$ and/or heat source $f$. Using them the main loss function for PINN can be calculated:
+
+\begin{align}
+	\mathcal{L}_{PDE} = \frac{1}{n}\| (\Tilde{u}_l)_t - \langle \nabla, \Tilde{a} \nabla \Tilde{u}\rangle - \Tilde{f} \|_{2}^{2}
+\end{align}
+
+That concludes this short introduction to the accompanying example. It is sufficient to assume that there exist some \hyperlink{https://github.com/RadmirG/Master-Arbeit}{\textbf{code sources}} that can be used as a basis and integrated into the MLOps system. The MLOps system will be designed to accept and analyze the measured data, to train the PINN, to use prediction to generate values and to monitor the reached results and PINN itself. The MLOps system will be derived step by step according to the chapters of this work. But firstly we will take a look how the PINN looks like in raw state as it now is and how it will be after the MLOps system is developed: \\
+
+\textbf{Without MLOps} \\
+
 \begin{itemize}
-	\item Data preprocessing, network training, and validation occur manually in notebooks.
+	\item Data preprocessing, network training, and validation occur manually.
 	\item Each retraining (e.g., when new measurements arrive) requires manual repetition.
-	\item No model versioning or metadata tracking — results are difficult to reproduce.
+	\item No model versioning or metadata tracking — results are difficult to reproduce. \\
 \end{itemize}
 
-\subsubsection*{With MLOps}
+\textbf{With MLOps} \\
+
 \begin{itemize}
 	\item \textbf{Data Ingestion:} Experimental measurements are automatically collected and versioned (e.g., via DVC).
 	\item \textbf{Training Pipeline:} Airflow triggers a PyTorch/DeepXDE training job on GPUs, logging all metrics to MLflow.
 	\item \textbf{Model Registry:} The trained PINN is stored with version and metadata.
 	\item \textbf{Deployment:} The model is deployed as an API service (e.g., KServe or FastAPI) for simulation queries.
 	\item \textbf{Monitoring:} Drift detectors compare new observations with model predictions.
-	\item \textbf{Retraining:} A CI/CD trigger starts retraining when deviation exceeds a threshold.
+	\item \textbf{Retraining:} A CI/CD trigger starts retraining when deviation exceeds a threshold. \\
 \end{itemize}
 
 This workflow transforms a research prototype into a maintainable scientific software system — reproducible, observable, and scalable.
 
-%------------------------------------------------
-\section*{Summary}
-MLOps bridges the gap between experimental research and production-grade ML systems.  
-It introduces a rigorous lifecycle of versioned data, tracked experiments, automated pipelines, monitored deployments, and governed operation.  
-In scientific contexts such as physics-informed modeling, this paradigm is crucial for ensuring both scientific validity and operational robustness.
+\begin{figure}[h]
+	\centering       
+	\begin{tikzpicture}[node distance=0.8cm and 0.8cm,
+		ell/.style={draw, ellipse, minimum width=0.5cm, minimum height=0.5cm, fill=blue!5},
+		forward/.style={->, dashed, gray}]		
+		% ---------------------------------------------------------------------------------------
+		% INPUT-LAYER
+		% ---------------------------------------------------------------------------------------
+		\node[ell] (data) {$\hat{\Omega} \times \hat{T}$};
+		\node[ell, below=of data, yshift=0.5cm] (fD) {$f_D$};
+		\node[ell, below=of fD, yshift=0.5cm] (uD) {$u_D$};
+		\node[draw, dashed, rounded corners, fit=(fD) (data) (uD), inner sep=0.2cm, color=YellowGreen] (data_groupbox) {};
+		
+		\node[ell, below=of data_groupbox] (input) {$\Tilde{\Omega} \times \Tilde{T}$};
+		% ---------------------------------------------------------------------------------------
+		% NN FOR f(x)
+		% ---------------------------------------------------------------------------------------
+		\node[block, right=of input, xshift=1cm, yshift=4cm] (nn_f) {NN : $f_l(x,t)$};
+		\node[block, below=of nn_f, xshift=1cm] (bpg_f) {$W_f = W'_f - \lambda \nabla_{W'_f} \mathcal{L}_{f_D}$};
+		\node[block, right=of nn_f] (loss_f) {$\mathcal{L}_{f_D}$};
+		\node[draw, dashed, rounded corners, fit=(nn_f) (bpg_f) (loss_f), inner sep=0.4cm] (groupbox_f) {};
+		% Arrows		
+		\draw[arrow, color=YellowGreen] (fD.east) 
+		-- ([xshift=1cm]fD.east)
+		-- ([xshift=1cm, yshift=-1.73cm]fD.east)
+		-- ([xshift=6.7cm, yshift=-1.73cm]fD.east)
+		-- ([xshift=6.7cm, yshift=1.125cm]fD.east)
+		-- (loss_f.east);
+		\draw[arrow] (nn_f) -- (loss_f);
+		\draw[arrow] (loss_f) -- (bpg_f);
+		\draw[arrow] (bpg_f) -- (nn_f);
+		\draw[arrow, color=YellowGreen] (data) -- (nn_f);		
+		% ---------------------------------------------------------------------------------------
+		% NN FOR u(x)
+		% ---------------------------------------------------------------------------------------
+		\node[block, right=of input, xshift=1cm] (nn_u) {NN : $u_l(x,t)$};
+		\node[block, below=of nn_u, xshift=1cm] (bpg_u) {$W_f = W'_f - \lambda \nabla_{W'_u} \mathcal{L}_{u_D}$};
+		\node[block, right=of nn_u] (loss_u) {$\mathcal{L}_{u_D}$};
+		\node[draw, dashed, rounded corners, fit=(nn_u) (bpg_u) (loss_u), inner sep=0.4cm] (groupbox_u) {};
+		% Arrows
+		\draw[arrow, color=YellowGreen] (uD.east) 
+		-- ([xshift=0.8cm]uD.east)
+		-- ([xshift=-4.82cm, yshift=0.5cm]loss_u.north)
+		-- ([yshift=0.5cm]loss_u.north)
+		-- (loss_u.north);	
+		\draw[arrow] (nn_u) -- (loss_u);
+		\draw[arrow] (loss_u) -- (bpg_u);
+		\draw[arrow] (bpg_u) -- (nn_u);
+		\draw[arrow,  color=YellowGreen] (data.west) 
+		-- ([xshift=-0.4cm]data.west) 
+		-- ([xshift=-4.018cm, yshift=1cm]nn_u.west) 
+		-- ([xshift=-2cm, yshift=1cm]nn_u.west)
+		-- (nn_u);
+		% ---------------------------------------------------------------------------------------
+		% PINN FOR a(x)
+		% ---------------------------------------------------------------------------------------
+		\node[block, right=of input, xshift=1.455cm, yshift=-4cm] (pinn_a) {PINN : $a_l(x)$};
+		\node[block, right=of pinn_a, xshift=0.8cm] (AD) {AD};
+		\node[block, right=of AD] (diff) {$(\Tilde{u}_l)_t, \langle \nabla, \Tilde{a}_l \nabla \Tilde{u} \rangle$};
+		\node[block, below=of pinn_a] (bpg) {$W = W' - \lambda \nabla_{W'} \mathcal{L}$};
+		\node[block, right=of bpg] (loss_a) {$\mathcal{L} = \mathcal{L}_{PDE}$};
+		\node[draw, dashed, rounded corners, fit=(pinn_a) (diff) (bpg) (loss_a), inner sep=0.4cm] (groupbox_a) {};	
+		\node[draw, circle, fill=blue!5, left=of pinn_a, xshift=-0.48cm] (x) {$x$};
+		\node[draw, circle, fill=blue!5, above=of x, yshift=-0.8cm] (t) {$t$};
+		% Arrows
+		\draw[arrow, color=YellowGreen] ([yshift=-4cm]input.north) 
+		-- (t) 
+		-- ([xshift=8.2cm]t.east)
+		-- (diff.north);
+		\draw[arrow] (input.south) 
+		-- ([yshift=-4cm]input.north)
+		-- (x)
+		-- (pinn_a.west);
+		\draw[arrow] (pinn_a) -- (AD);
+		\draw[arrow] (AD) -- (diff);
+		\draw[arrow] (diff) -- (loss_a);
+		\draw[arrow] (loss_a) -- (bpg);
+		\draw[arrow] (bpg) -- (pinn_a);
+		% ---------------------------------------------------------------------------------------
+		% MODELS USE
+		% ---------------------------------------------------------------------------------------	
+		\node[right=of groupbox_f, xshift=0.6cm, yshift=1cm] (use_models) {Use as models};
+		\node[ell, right=of groupbox_f, xshift=1cm] (model_f) {$f_l(x, t)$};
+		\node[ell, right=of groupbox_u, xshift=1cm] (model_u) {$u_l(x, t)$};
+		\draw [thick, decorate, decoration={brace,amplitude=12pt}] ([xshift=2.7cm]groupbox_f.north) -- ([xshift=2.7cm]groupbox_f.south) {};
+		\draw [thick, decorate, decoration={brace,amplitude=12pt}] ([xshift=2.7cm]groupbox_u.north) -- ([xshift=2.7cm]groupbox_u.south) {};			
+		% Arrows
+		\draw[arrow] (input.south) 
+		-- ([yshift=-3.35cm]input.north)
+		-- ([xshift=8cm, yshift=-3.35cm]input.north)
+		-- ([xshift=8cm, yshift=2.625cm]input.north)
+		-- (model_f);	
+		\draw[arrow] (input.south) 
+		-- ([yshift=-3.35cm]input.north)
+		-- ([xshift=8cm, yshift=-3.35cm]input.north)
+		-- ([xshift=8cm, yshift=-1.35cm]input.north)
+		-- (model_u);
+		\draw[arrow] (model_u) -- (AD);
+		\draw[arrow] (model_f.east) 
+		-- ([xshift=1.15cm]model_f.east)
+		-- ([xshift=1.15cm, yshift=-8.89cm]model_f.east)
+		-- (loss_a.east);						
+		\node[draw, dashed, rounded corners, fit=(use_models) (model_f) (model_u) , inner sep=0.2cm] (group_models) {};		
+		% ---------------------------------------------------------------------------------------	
+		\node[draw, rounded corners, fit=(groupbox_f) (groupbox_a) (groupbox_u) , inner sep=0.4cm] (groupbox) {};		
+	\end{tikzpicture}
+	\caption[Separated training of the PINN for the inverse heat conduction problem]{Separated training of the Physics-Informed Neural Network (PINN) for the inverse heat conduction problem with respect to thermal diffusivity.
+		The neural networks for $u_l$ and $f_l$ are trained in independent training loops using the datasets $\hat{\Omega} \times \hat{T}$ and the measurement data $f_D$ and $u_D$, respectively.
+		After this pretraining phase, the actual PINN training is carried out on the dataset $\tilde{\Omega} \times \tilde{T}$, where the pretrained models $u_l$ and $f_l$ are used to compute the PDE residual.
+		The PINN itself receives only spatial inputs from $\tilde{\Omega}$.
+		The green arrow originating from the node $t$ represents the temporal consistency of the training data and supplies the corresponding time values required for evaluating the derivatives of $u_l$.}
+	
+	\label{fig:2.2}
+\end{figure}
+
+
+

@@ -14,8 +14,10 @@
 \usepackage{listings}
 \usepackage{tikz}
 \usetikzlibrary{decorations.pathreplacing}
-\usetikzlibrary{positioning, shapes.geometric, arrows}
-\usetikzlibrary{shapes, arrows.meta, positioning}
+\usetikzlibrary{positioning, shapes, shapes.geometric, arrows, arrows.meta, fit, backgrounds, calc}
+\tikzstyle{block} = [rectangle, draw, rounded corners, minimum height=1cm, minimum width=1cm, text centered, font=\small, fill=blue!5, inner sep=0.1cm]
+\tikzstyle{arrow} = [thin, -{Stealth}]
+\tikzstyle{bigarrow} = [thin, -{Stealth}, line width=1.2pt]
 \usepackage{chngcntr}
 \counterwithout{footnote}{chapter}
 \usepackage{mathrsfs}
@@ -31,6 +33,7 @@ bottom=2.5cm,
 %includeheadfoot
 ]{geometry}
 \usepackage{xcolor}
+\usepackage[dvipsnames]{xcolor}
 \usepackage{xspace}
 \usepackage{listings}
 \usepackage{framed}
@@ -40,6 +43,8 @@ bottom=2.5cm,
 \usepackage[table]{xcolor}
 \usepackage{colortbl}
 
+\usepackage{array}
+\newcolumntype{C}[1]{>{\centering\arraybackslash\hspace{0pt}}m{#1}}
 
 %------------------------------------------------------------------------
 % meine Packages
@@ -111,6 +116,10 @@ bottom=2.5cm,
 	\include{captures/05}
 	\include{captures/06}
 	\include{captures/07}
-    % Sample citation to ensure references are included
-    \cite{gPINNs21}
+	
+	%----------------------------------------------------
+	\MakeBibliography % Print Bibliography
+	\listoffigures % Print the list of figures
+	\listoftables % Print the list of tables
+
 \end{document}

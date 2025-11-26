@@ -1,4 +1,6 @@
 \chapter{Monitoring, Drift, and Retraining}
+\label{cha:7}
+
 \subsection*{Goal}
 Implement continuous monitoring and feedback loops for deployed models.
 
@@ -32,6 +34,237 @@ Implement continuous monitoring and feedback loops for deployed models.
   \item \textbf{Evidently AI:} computes drift/statistics and generates reports.
   \item \textbf{WhyLabs:} managed monitoring/logging for data \& ML.
 \end{itemize}
+
+
+\section{Model Drift}
+\label{cha:7.1}
+
+Deployed machine learning models operate in inherently non-stationary environments.  
+Formally, most learning algorithms are based on the assumption that the training and deployment distributions coincide:
+\[
+P_{\text{train}}(X,Y) \approx P_{\text{future}}(X,Y).
+\]
+In practice, however, real-world systems evolve over time due to environmental, technological, or physical changes. This leads to a violation of the stationarity assumption and results in gradual or abrupt model performance degradation.
+
+Let \( \mathcal{D}_t \) denote the data distribution at time \(t\). A learning system is trained at time \(t_0\) using samples drawn from \( \mathcal{D}_{t_0} \). Over time, the operational distribution evolves as:
+\[
+\mathcal{D}_{t_0} \to \mathcal{D}_{t_1} \to \mathcal{D}_{t_2} \to \cdots
+\]
+with potentially increasing discrepancy between \( \mathcal{D}_{t_0} \) and \( \mathcal{D}_{t_k} \).  
+
+This temporal evolution induces what is known as \emph{model drift}, i.e., a systematic deviation between the model’s learned representation and the true underlying data-generating process.
+
+In physics-driven problems such as inverse heat conduction with Physics-Informed Neural Networks (PINNs), this drift additionally affects:
+\begin{itemize}
+	\item the learned physical parameters \( a(x,y) \),
+	\item the inferred source term \( f(x,y,t) \),
+	\item and the model’s PDE consistency via the residual \( \mathcal{R}(x,y,t) \).
+\end{itemize}
+
+---
+
+\subsection*{Types of Drift}
+
+Drift can be formally categorized according to which part of the joint distribution changes over time.
+
+Let:
+\[
+P_t(X,Y) = P_t(Y|X) P_t(X).
+\]
+
+\subsection*{1. Data Drift (Covariate Shift)}
+
+Here, only the marginal input distribution changes:
+\[
+P_{\text{train}}(X) \neq P_{\text{live}}(X), \quad P(Y|X) \approx \text{const}.
+\]
+
+This situation arises frequently when sensor characteristics, data acquisition environments, or experimental setups change.  
+In your PINN application, this might correspond to changes in spatial sampling density or a shift in measurement device precision without altering the underlying heat physics.
+
+The severity of this change can be quantified using statistical divergence measures such as:
+\[
+D_{\text{JS}}(P_{\text{train}}(X) \| P_{\text{live}}(X)), \quad 
+W_1(P_{\text{train}}(X), P_{\text{live}}(X)),
+\]
+where \(D_{\text{JS}}\) is the Jensen–Shannon divergence and \(W_1\) is the Wasserstein distance.
+
+---
+
+\subsection*{2. Concept Drift}
+
+In this case, the conditional distribution changes:
+\[
+P_{\text{train}}(Y|X) \neq P_{\text{live}}(Y|X).
+\]
+
+This is particularly relevant in physical systems where materials, boundary conditions, or external forcing terms evolve.
+
+For your PINN problem, this corresponds to changes in the physical mapping governed by:
+\[
+u_t - \nabla \cdot (a(x,y) \nabla u) = f(x,y,t),
+\]
+where the coefficients \(a(x,y)\) and \(f(x,y,t)\) themselves may drift over time.
+
+Concept drift is more dangerous because it affects the true physical law representation, not just its observations.
+
+---
+
+\subsection*{3. Model Drift}
+
+Even under stationary \(P(X,Y)\), a model may degrade due to:
+\begin{itemize}
+	\item limited capacity,
+	\item overfitting to outdated patterns,
+	\item poor calibration to new regimes.
+\end{itemize}
+
+In PINNs, model drift manifests as:
+\[
+\|\mathcal{R}_{\text{PDE}}(u_\theta)\|_{L^2(\Omega)} \uparrow,
+\quad
+\|\hat{a}(x,y) - a^*(x,y)\| \uparrow,
+\]
+where \( \mathcal{R}_{\text{PDE}} \) is the PDE residual functional.
+
+---
+
+\subsection*{Monitoring and Drift Detection}
+
+Let \( \{X_t\}_{t \geq 0} \) denote incoming data streams. Drift detection can be formulated as a hypothesis testing problem:
+
+\[
+H_0: P_{\text{train}}(X) = P_{\text{live}}(X)
+\]
+\[
+H_1: P_{\text{train}}(X) \neq P_{\text{live}}(X)
+\]
+
+Statistical tools for detecting drift include:
+\begin{itemize}
+	\item Kolmogorov–Smirnov Tests,
+	\item Population Stability Index (PSI),
+	\item Maximum Mean Discrepancy (MMD),
+	\item Wasserstein Distance.
+\end{itemize}
+
+In an MLOps context, monitoring operates on three layers:
+
+\begin{enumerate}
+	\item \textbf{Input Level:} Distribution of features, spatial coordinates, and time signals.
+	\item \textbf{Output Level:} Distribution of predicted temperature fields or reconstructed \(u(x,y,t)\).
+	\item \textbf{Physical Level:} Evolution of PDE residual norms:
+	\[
+	\mathcal{E}_{\text{PDE}} = \int_\Omega |\mathcal{R}(x,y,t)|^2 d\Omega,
+	\]
+	serving as physics-consistency drift indicators.
+\end{enumerate}
+
+---
+
+\subsection{Automated Retraining Loop}
+
+Let \( \mathcal{M}_k \) denote the deployed model at cycle \(k\).  
+A retraining strategy is triggered when a monitoring functional exceeds a threshold:
+\[
+\Phi(\mathcal{M}_k) > \epsilon.
+\]
+
+This functional may be defined as:
+\[
+\Phi(\mathcal{M}) = \alpha D_{\text{data}} + \beta D_{\text{concept}} + \gamma \mathcal{E}_{\text{PDE}},
+\]
+where \( \alpha, \beta, \gamma \) are weighting coefficients.
+
+Triggered retraining pipelines perform:
+
+\begin{enumerate}
+	\item Data re-collection: \( \mathcal{D}_{k+1} \),
+	\item Versioning via DVC/LakeFS,
+	\item Model retraining: \( \mathcal{M}_{k+1} \),
+	\item Evaluation via:
+	\[
+	\text{RMSE}, \quad \mathcal{E}_{\text{PDE}}, \quad \|\hat{a} - \hat{a}^*\|,
+	\]
+	\item Promotion using a controlled deployment scheme (Canary, Blue–Green).
+\end{enumerate}
+
+The updated model \( \mathcal{M}_{k+1} \) replaces \( \mathcal{M}_k \) only if:
+\[
+\mathcal{J}(\mathcal{M}_{k+1}) < \mathcal{J}(\mathcal{M}_k),
+\]
+where \( \mathcal{J} \) is a model quality functional combining prediction accuracy and physical consistency.
+
+---
+
+\subsection*{Drift in the Context of Inverse Heat Problems}
+
+In inverse heat conduction using PINNs, drift manifests as:
+
+\begin{itemize}
+	\item Evolution of estimated diffusivity fields \( a(x,y,t) \),
+	\item Changes in source term reconstruction \( f(x,y,t) \),
+	\item Increase in physics residual norms,
+	\item Degradation in predicted temperature field fidelity.
+\end{itemize}
+
+This allows the development of \emph{physics-aware drift metrics} beyond standard data-based metrics.
+
+A possible drift monitor functional is:
+\[
+D_{\text{phys}} = \int_\Omega \left| a_k(x,y) - a_{k-1}(x,y) \right|^2 dxdy
++ \int_\Omega |\mathcal{R}_k(x,y,t)|^2 dxdy,
+\]
+enabling detection rooted in physical model deviations.
+
+---
+
+\subsection*{Conclusion}
+
+Model drift is not merely a statistical phenomenon but a dynamic system-level challenge involving evolving data distributions, changing physical laws, and model degradation.  
+Modern MLOps frameworks address this by unifying:
+
+\begin{itemize}
+	\item statistical drift detection,
+	\item physics-informed monitoring,
+	\item automated retraining pipelines,
+	\item controlled deployment strategies.
+\end{itemize}
+
+This integration transforms machine learning systems from static estimators into self-correcting dynamical systems capable of long-term deployment in non-stationary environments.
+
+
+\subsection{Drift–Retraining Architecture}
+
+\begin{figure}[h]
+	\centering
+	\begin{tikzpicture}[
+		font=\small,
+		node distance=2.1cm,
+		box/.style={rectangle, rounded corners, draw, align=center, minimum width=3.7cm, minimum height=1.2cm},
+		arrow/.style={->, thick}
+		]
+		
+		\node[box] (deploy) {Deployed Model\\(FastAPI / KServe)};
+		\node[box, right=of deploy] (monitor) {Monitoring\\Prometheus + Grafana};
+		\node[box, below=of monitor] (drift) {Drift Detection\\Evidently / WhyLabs};
+		\node[box, left=of drift] (pipeline) {Retraining Pipeline\\Airflow / Kubeflow};
+		\node[box, below=of pipeline] (registry) {Model Registry\\MLflow};
+		
+		\draw[arrow] (deploy) -- node[above]{metrics, logs} (monitor);
+		\draw[arrow] (monitor) -- node[right]{distribution shift} (drift);
+		\draw[arrow] (drift) -- node[below]{drift alert} (pipeline);
+		\draw[arrow] (pipeline) -- node[left]{new version} (registry);
+		\draw[arrow] (registry.west) -- ($(registry.west)+(-0.5cm,0)$) -- node[left]{redeploy}($(registry.west)+(-0.5cm, 5cm)$) |- (deploy.west);
+		
+	\end{tikzpicture}
+	\caption{Automated model drift detection and retraining loop in an MLOps system.}
+	\label{fig:drift_loop}
+\end{figure}
+
+Figure~\ref{fig:drift_loop} illustrates the automated drift detection and retraining loop implemented within the MLOps workflow.
+
+
 
 \section*{Step 1 — Instrument the PINN service (Prometheus)}
 

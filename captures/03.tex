@@ -3,6 +3,132 @@
 The objective of this module is to understand how the core components of an MLOps ecosystem fit together, and how containerization, orchestration, and automation form the foundation of scalable, reproducible machine learning systems.  
 We will explore the relationship between \textbf{Docker}, \textbf{Kubernetes}, and \textbf{OpenShift} as infrastructural layers, and how these integrate with higher-level ML services such as \textbf{Airflow}, \textbf{MLflow}, and \textbf{Kubeflow}.
 
+
+\begin{figure}[h]
+	\centering
+	\resizebox{0.95\textwidth}{!}{%
+		\begin{tikzpicture}[
+			font=\scriptsize,
+			node distance=0.8cm and 1.1cm,
+			box/.style={rectangle, rounded corners, draw, align=left,
+				inner sep=3pt, outer sep=1pt},
+			group/.style={rectangle, rounded corners, draw, thick,
+				inner sep=6pt, fill=blue!5},
+			arrow/.style={-{Latex[length=2mm]}, thick},
+			]
+			
+			% === DATA & FEATURES ===
+			\node[box] (sources) {
+				\textbf{Raw Data}\\Sensors, simulations, logs, files
+			};
+			
+			\node[box, below=of sources] (data_mgmt) {
+				\textbf{Data \& Experiments}\\ DVC/LakeFS (versions)\\ Feast (features)
+			};
+			
+			% === TRAINING PIPELINES ===
+			\node[box, right=of data_mgmt] (pipelines) {
+				\textbf{Pipelines}\\Airflow/Kubeflow\\Tekton/Argo\\Validation gates
+			};
+			
+			
+			% === MODEL REGISTRY & IMAGES ===
+			\node[box, below=of pipelines, xshift=5cm] (registry) {
+				\textbf{Registries}\\MLflow Model Registry\\Docker Registry
+			};
+			
+			% === GIT & CI/CD ===
+			\node[box, right=of sources, yshift=2cm] (git) {
+				\textbf{Git Repos}\\Code, config, manifests
+			};
+			
+			\node[box, right=of git, yshift=-2cm] (cicd) {
+				\textbf{CI/CD}\\GitLab/Jenkins/ArgoCD
+			};			
+			
+			% === SERVING ===
+			\node[box, below=of registry, xshift=-2cm] (serving) {
+				\textbf{Serving}\\FastAPI/Flask\\KServe/Seldon\\
+				\texttt{do\_prediction(...)}
+			};
+			
+			% === MONITORING & DRIFT ===
+			\node[box, below=of data_mgmt] (monitoring) {
+				\textbf{Monitoring \& Drift}\\Prometheus, Grafana\\Evidently, WhyLabs\\Alerts \& triggers
+			};
+			
+			% === EXPERIMENT TRACKING ===
+			\node[box, right=of pipelines] (mlflow) {
+				\textbf{MLflow}\\metrics, params, artifacts
+			};
+			
+			% === RETRAIN LOOP ===
+			\node[box, below=of pipelines] (retrain) {
+				\textbf{Retraining}\\Scheduled/event-based\\Compare \& promote
+			};
+			
+			% === PLATFORM GROUP ===
+			\begin{pgfonlayer}{background}
+				\node[group,
+				fit=(pipelines) (registry) (cicd) (retrain) (registry),
+				label={[yshift=0.1cm]above:
+					\textbf{MLOps Platform (Kubernetes / OpenShift)}}
+				] (platform) {};
+			\end{pgfonlayer}
+			
+			
+			% === ARROWS ===
+			% ingest
+			\draw[arrow] (sources) -- node[above]{} (data_mgmt);
+			
+			% versioned data/features
+			\draw[arrow] (data_mgmt) -- node[above]{} (pipelines);
+			
+			% metrics, artifacts
+			\draw[arrow] (pipelines) -- node[right]{} (mlflow);
+			
+			% best run
+			\draw[arrow] (mlflow) -- node[left]{} (pipelines);
+			
+			% packaged model
+			\draw[arrow] (pipelines) -- node[above]{} (registry);
+			
+			% push/MR
+			\draw[arrow] (git.east) -- ($(git.east)+(6cm, 0)$) |- (cicd.east);
+			
+			% deploy pipelines
+			\draw[arrow] (cicd.west) --  ($(cicd.west)+(-1cm, 0)$) -| node[above]{} (pipelines.north);
+			
+			% deploy services
+			\draw[arrow] (cicd.south) -- ($(cicd.south)+(0, -0.5cm)$)
+								      -- ($(cicd.south)+(3cm, -0.5cm)$) |- (serving.east);
+			
+			% image \& weights
+			\draw[arrow] (registry) -- (serving);
+			
+			% metrics, logs
+			\draw[arrow] (serving.west) -| (monitoring.south);
+			
+			% ref.\ data
+			\draw[arrow] (data_mgmt.south) -- node[left]{} (monitoring.north);
+			
+			% drift alert
+			\draw[arrow] (monitoring.east) -- (retrain.west);
+			
+			% new run
+			\draw[arrow] (retrain) -- node[right]{} (pipelines.south);
+			
+			% promote
+			\draw[arrow, dashed] (retrain.east) -- (registry.west);
+			
+		\end{tikzpicture}%
+	}
+	\caption{End-to-end MLOps architecture for an abstract problem \texttt{do\_prediction(...)} which cares about:
+		data, pipelines, deployment, monitoring, and retraining.}
+\end{figure}
+
+
+
 %------------------------------------------------
 \section*{Stack Overview}
 At the heart of modern MLOps lies the idea of \textbf{infrastructure abstraction}: machine learning workloads are encapsulated inside containers and orchestrated across clusters in a reproducible and portable manner.  
@@ -17,7 +143,7 @@ A typical stack can be described as follows:
 These layers work together to move from experimentation to production while maintaining scientific rigor, operational stability, and continuous improvement.
 
 %------------------------------------------------
-\section*{From Containers to Clusters: Docker, Kubernetes, and OpenShift}
+\section{From Containers to Clusters: Docker, Kubernetes, and OpenShift}
 
 \subsection*{Docker: The Fundamental Building Block}
 \textbf{Docker} provides a lightweight mechanism to package applications, dependencies, and environments into isolated \textit{containers}.  
